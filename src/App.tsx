@@ -155,7 +155,7 @@ function Welcome({ onRegister, onLogin, onDemo, checking = false, connectionErro
   )
 }
 
-function Sidebar({ tab, setTab }: { tab: Tab; setTab: (tab: Tab) => void }) {
+function Sidebar({ tab, setTab, mode }: { tab: Tab; setTab: (tab: Tab) => void; mode: 'demo' | 'api' }) {
   const items: Array<[Tab, string, typeof HomeIcon]> = [
     ['home', 'Inicio', HomeIcon],
     ['activity', 'Actividad', ActivityIcon],
@@ -168,7 +168,7 @@ function Sidebar({ tab, setTab }: { tab: Tab; setTab: (tab: Tab) => void }) {
       <Logo />
       <nav>{items.map(([id, label, Icon]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><Icon />{label}</button>)}</nav>
       <div className="sidebar-help"><span>?</span><div><strong>¿Necesitas ayuda?</strong><small>Visita Ion Guide</small></div></div>
-      <div className="demo-pill"><i /> Entorno de demostración</div>
+      <div className="demo-pill"><i /> {mode === 'demo' ? 'Demo local' : 'API local'}</div>
     </aside>
   )
 }
@@ -525,7 +525,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar tab={tab} setTab={setTab} />
+      <Sidebar tab={tab} setTab={setTab} mode={mode} />
       <main className="app-content">
         {tab === 'home' && <Home state={state} setAction={setAction} setTab={setTab} openReceipt={setReceipt} />}
         {tab === 'activity' && <ActivityPage transactions={state.transactions} openReceipt={setReceipt} />}

@@ -48,6 +48,7 @@ function readSession(): Session | null {
     }
     return session
   } catch {
+    try { sessionStorage.removeItem(SESSION_KEY) } catch { /* session storage unavailable */ }
     return null
   }
 }
