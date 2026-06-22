@@ -36,8 +36,9 @@ import {
   UserIcon,
 } from './components/Icons'
 import ServicesPage from './components/ServicesPage'
+import { api, IonPayApiError } from './lib/api'
 import { clearState, demoState, loadState, saveState } from './lib/storage'
-import type { Currency, IonState, IonUser, Transaction, TransactionKind } from './types'
+import type { Currency, IonState, IonUser, Transaction, TransactionKind, User } from './types'
 
 type Tab = 'home' | 'activity' | 'services' | 'cards' | 'profile'
 type Action = 'send' | 'receive' | 'pay' | 'convert' | null
@@ -72,18 +73,39 @@ function Logo({ compact = false }: { compact?: boolean }) {
   )
 }
 
-function Welcome({ onCreate, onDemo }: { onCreate: (user: IonUser) => void; onDemo: () => void }) {
-  const [step, setStep] = useState<'welcome' | 'register'>('welcome')
+interface WelcomeProps {
+  onRegister: (input: { name: string; phone: string; alias: string; password: string }) => Promise<void>
+  onLogin: (input: { phone: string; password: string }) => Promise<void>
+  onDemo: () => void
+  checking?: boolean
+  connectionError?: string
+  onRetry: () => void
+}
+
+function Welcome({ onRegister, onLogin, onDemo, checking = false, connectionError = '', onRetry }: WelcomeProps) {
+  const [step, setStep] = useState<'welcome' | 'register' | 'login'>('welcome')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [alias, setAlias] = useState('')
+  const [password, setPassword] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
 
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault()
-    const cleanName = name.trim()
-    const cleanPhone = phone.trim()
-    if (!cleanName || cleanPhone.length < 7) return
-    const first = cleanName.split(' ')[0].toLowerCase().replace(/[^a-záéíóúñ0-9]/g, '')
-    onCreate({ name: cleanName, phone: cleanPhone, alias: `${first}.ion`, kycStatus: 'Pendiente' })
+    setError('')
+    setSubmitting(true)
+    try {
+      if (step === 'register') {
+        await onRegister({ name: name.trim(), phone: phone.trim(), alias: alias.trim().replace(/^@/, ''), password })
+      } else {
+        await onLogin({ phone: phone.trim(), password })
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo completar la solicitud.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -106,20 +128,26 @@ function Welcome({ onCreate, onDemo }: { onCreate: (user: IonUser) => void; onDe
             <span className="eyebrow">Bienvenido a IONPAY</span>
             <h2>Tu billetera empieza aquí</h2>
             <p>Crea una cuenta y administra tu dinero con claridad, seguridad y control.</p>
-            <button className="primary-button" onClick={() => setStep('register')}>Crear mi cuenta <ChevronIcon /></button>
+            {checking && <div className="connection-note"><i /> Verificando tu sesión con la API…</div>}
+            {connectionError && <div className="form-error api-error">{connectionError}<button onClick={onRetry}>Reintentar</button></div>}
+            <button className="primary-button" onClick={() => setStep('register')} disabled={checking}>Crear mi cuenta <ChevronIcon /></button>
+            <button className="secondary-button auth-login-button" onClick={() => setStep('login')} disabled={checking}>Ya tengo una cuenta</button>
             <button className="text-button" onClick={onDemo}>Explorar versión demo</button>
             <div className="demo-caption">La demo utiliza fondos simulados. No mueve dinero real.</div>
           </div>
         ) : (
           <form className="auth-box" onSubmit={submit}>
             <button type="button" className="back-button" onClick={() => setStep('welcome')}>← Volver</button>
-            <span className="eyebrow">Crear cuenta</span>
-            <h2>Cuéntanos sobre ti</h2>
-            <p>Empezaremos con tus datos básicos. La verificación de identidad vendrá después.</p>
-            <label className="field"><span>Nombre completo</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Alex Rivera" autoFocus /></label>
+            <span className="eyebrow">{step === 'register' ? 'Crear cuenta' : 'Acceso seguro'}</span>
+            <h2>{step === 'register' ? 'Cuéntanos sobre ti' : 'Bienvenido de nuevo'}</h2>
+            <p>{step === 'register' ? 'Tus datos se registrarán en la API local de ionPAY.' : 'Ingresa con el celular y la contraseña de tu cuenta.'}</p>
+            {step === 'register' && <label className="field"><span>Nombre completo</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Alex Rivera" autoFocus /></label>}
             <label className="field"><span>Número de celular</span><input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+51 999 999 999" inputMode="tel" /></label>
-            <button className="primary-button" type="submit" disabled={!name.trim() || phone.trim().length < 7}>Continuar <ChevronIcon /></button>
-            <small>Al continuar aceptas los términos de la versión de prueba.</small>
+            {step === 'register' && <label className="field"><span>IonTag</span><input value={alias} onChange={(e) => setAlias(e.target.value)} placeholder="alex.ion" autoCapitalize="none" /></label>}
+            <label className="field"><span>Contraseña</span><input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 8 caracteres" type="password" autoComplete={step === 'login' ? 'current-password' : 'new-password'} /></label>
+            {error && <div className="form-error">{error}</div>}
+            <button className="primary-button" type="submit" disabled={submitting || phone.trim().length < 7 || password.length < 8 || (step === 'register' && (!name.trim() || alias.trim().replace(/^@/, '').length < 3))}>{submitting ? 'Conectando…' : step === 'register' ? 'Crear cuenta' : 'Iniciar sesión'} {!submitting && <ChevronIcon />}</button>
+            <small>La autenticación utiliza la API local. No ingreses credenciales financieras reales.</small>
           </form>
         )}
       </section>
@@ -274,7 +302,7 @@ function ScreenHeader({ title, back, settings }: { title: string; back?: () => v
   return <header className="profile-screen-header">{back ? <button aria-label="Volver" onClick={back}>←</button> : <span />}<h1>{title}</h1>{settings ? <button aria-label="Ajustes" onClick={settings}><SettingsIcon /></button> : <span />}</header>
 }
 
-function ProfilePage({ user, onReset }: { user: IonUser; onReset: () => void }) {
+function ProfilePage({ user, onReset, logoutLabel }: { user: IonUser; onReset: () => void; logoutLabel: string }) {
   const [screen, setScreen] = useState<'profile' | 'settings' | 'devices'>('profile')
   const [trusted, setTrusted] = useState(true)
   const [biometric, setBiometric] = useState(true)
@@ -296,7 +324,7 @@ function ProfilePage({ user, onReset }: { user: IonUser; onReset: () => void }) 
       <span className="profile-section-label">Pagos y límites</span>
       <section className="profile-menu-card"><ProfileRow Icon={BankIcon} title="Cuentas bancarias" value="0 vinculadas" /><ProfileRow Icon={CardIcon} title="Tarjetas" value="1 activa" /><ProfileRow Icon={ActivityIcon} title="Límites diarios" value="Ver límites" /><ProfileRow Icon={UsersIcon} title="Beneficiarios" value="0 guardados" /></section>
       <section className="profile-menu-card profile-help"><ProfileRow Icon={HelpIcon} title="Ayuda y soporte" /></section>
-      <button className="profile-logout" onClick={onReset}><LogoutIcon /> Salir y borrar datos demo</button>
+      <button className="profile-logout" onClick={onReset}><LogoutIcon /> {logoutLabel}</button>
     </section>
   )
 }
@@ -308,11 +336,12 @@ function ToggleProfileRow({ Icon, title, detail, value, setValue }: { Icon: type
 interface ActionModalProps {
   action: Exclude<Action, null>
   state: IonState
+  demoMode: boolean
   onClose: () => void
   onTransaction: (transaction: Transaction, penChange: number, usdtChange?: number) => void
 }
 
-function ActionModal({ action, state, onClose, onTransaction }: ActionModalProps) {
+function ActionModal({ action, state, demoMode, onClose, onTransaction }: ActionModalProps) {
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
@@ -326,6 +355,23 @@ function ActionModal({ action, state, onClose, onTransaction }: ActionModalProps
     receive: { title: 'Recibir dinero', eyebrow: 'Tu cuenta IONPAY', target: '', placeholder: '', button: '' },
     convert: { title: 'Convertir saldo', eyebrow: 'Ion Convert', target: '', placeholder: '', button: 'Confirmar conversión' },
   }[action]
+
+  if (!demoMode) {
+    return (
+      <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+        <section className="modal" role="dialog" aria-modal="true">
+          <button className="modal-close" onClick={onClose}><CloseIcon /></button>
+          <span className="eyebrow">Integración por etapas</span>
+          <h2>{config.title}</h2>
+          <div className="notice-box api-pending-operation">
+            <strong>Operación todavía no conectada</strong>
+            <p>En esta fase solo se conectaron autenticación, saldos y actividad. Esta acción no enviará ni modificará dinero.</p>
+          </div>
+          <button className="secondary-button" onClick={onClose}>Entendido</button>
+        </section>
+      </div>
+    )
+  }
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
@@ -355,7 +401,7 @@ function ActionModal({ action, state, onClose, onTransaction }: ActionModalProps
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <section className="modal" role="dialog" aria-modal="true">
         <button className="modal-close" onClick={onClose}><CloseIcon /></button>
-        <span className="eyebrow">{config.eyebrow}</span><h2>{config.title}</h2>
+        <span className="eyebrow">Modo demostración</span><h2>{config.title}</h2>
         {action === 'receive' ? <ReceivePanel user={state.user!} /> : (
           <form onSubmit={submit}>
             {action === 'convert' ? <div className="segment"><button type="button" className={direction === 'toUsdt' ? 'active' : ''} onClick={() => setDirection('toUsdt')}>PEN → USDT</button><button type="button" className={direction === 'toPen' ? 'active' : ''} onClick={() => setDirection('toPen')}>USDT → PEN</button></div> : <label className="field"><span>{config.target}</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder={config.placeholder} autoFocus /></label>}
@@ -364,7 +410,7 @@ function ActionModal({ action, state, onClose, onTransaction }: ActionModalProps
             {action !== 'convert' && <label className="field"><span>Nota <i>(opcional)</i></span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="¿Para qué es?" /></label>}
             {error && <div className="form-error">{error}</div>}
             <button className="primary-button" type="submit">{config.button}</button>
-            <div className="safe-caption"><ShieldIcon /> Operación protegida y registrada</div>
+            <div className="safe-caption"><ShieldIcon /> Simulación local: no mueve dinero real</div>
           </form>
         )}
       </section>
@@ -386,28 +432,96 @@ function ReceiptModal({ item, onClose }: { item: Transaction; onClose: () => voi
   return <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}><section className="modal receipt"><button className="modal-close" onClick={onClose}><CloseIcon /></button><div className="success-mark"><CheckIcon /></div><span className="eyebrow">Ion Receipt</span><h2>{item.status}</h2><div className={`receipt-amount ${item.direction}`}>{item.direction === 'in' ? '+' : item.direction === 'out' ? '−' : ''}{money(item.amount, item.currency)}</div><div className="receipt-details"><div><span>Operación</span><strong>{item.title}</strong></div><div><span>Referencia</span><strong>{item.counterpart}</strong></div><div><span>Fecha</span><strong>{new Date(item.createdAt).toLocaleString('es-PE')}</strong></div><div><span>Canal</span><strong>{item.channel}</strong></div><div><span>Código</span><strong>{item.id}</strong></div></div><button className="secondary-button" onClick={onClose}>Cerrar comprobante</button></section></div>
 }
 
+type AppMode = 'checking' | 'signed-out' | 'api' | 'demo'
+
+function toIonUser(user: User): IonUser {
+  return {
+    name: user.name,
+    phone: user.phone,
+    alias: user.alias,
+    kycStatus: user.kycStatus === 'VERIFIED' ? 'Verificado' : 'Pendiente',
+  }
+}
+
 export default function App() {
-  const [state, setState] = useState<IonState>(() => loadState())
+  const [state, setState] = useState<IonState>({ user: null, wallet: { pen: 0, usdt: 0 }, transactions: [] })
+  const [mode, setMode] = useState<AppMode>('checking')
+  const [connectionError, setConnectionError] = useState('')
   const [tab, setTab] = useState<Tab>('home')
   const [action, setAction] = useState<Action>(null)
   const [receipt, setReceipt] = useState<Transaction | null>(null)
   const [toast, setToast] = useState('')
 
-  useEffect(() => { saveState(state) }, [state])
+  const loadApiState = async (knownUser?: User) => {
+    const [user, balances, transactions] = await Promise.all([
+      knownUser ? Promise.resolve(knownUser) : api.getUser(),
+      api.getBalances(),
+      api.getActivity(),
+    ])
+    setState({
+      user: toIonUser(user),
+      wallet: { pen: balances.PEN ?? 0, usdt: balances.USDT ?? 0 },
+      transactions,
+    })
+    setConnectionError('')
+    setMode('api')
+  }
 
-  const createUser = (user: IonUser) => setState({ user, wallet: { pen: 0, usdt: 0 }, transactions: [] })
-  const loadDemo = () => setState(structuredClone(demoState))
-  const reset = () => { clearState(); setState({ user: null, wallet: { pen: 0, usdt: 0 }, transactions: [] }); setTab('home') }
+  const restoreSession = async () => {
+    if (!api.hasSession()) {
+      setMode('signed-out')
+      return
+    }
+    setMode('checking')
+    try {
+      await loadApiState()
+    } catch (cause) {
+      const message = cause instanceof IonPayApiError ? cause.message : 'No se pudo recuperar tu sesión.'
+      setConnectionError(message)
+      setMode('signed-out')
+    }
+  }
+
+  useEffect(() => { void restoreSession() }, [])
+  useEffect(() => { if (mode === 'demo') saveState(state) }, [mode, state])
+
+  const register = async (input: { name: string; phone: string; alias: string; password: string }) => {
+    const user = await api.register(input)
+    await loadApiState(user)
+  }
+
+  const login = async (input: { phone: string; password: string }) => {
+    const user = await api.login(input)
+    await loadApiState(user)
+  }
+
+  const loadDemo = () => {
+    const savedDemo = loadState()
+    setState(savedDemo.user ? savedDemo : structuredClone(demoState))
+    setConnectionError('')
+    setMode('demo')
+  }
+
+  const reset = () => {
+    api.clearSession()
+    if (mode === 'demo') clearState()
+    setState({ user: null, wallet: { pen: 0, usdt: 0 }, transactions: [] })
+    setMode('signed-out')
+    setTab('home')
+  }
 
   const addTransaction = (transaction: Transaction, penChange: number, usdtChange = 0) => {
+    if (mode !== 'demo') return
     setState((current) => ({ ...current, wallet: { pen: Math.max(0, current.wallet.pen + penChange), usdt: Math.max(0, current.wallet.usdt + usdtChange) }, transactions: [transaction, ...current.transactions] }))
     setAction(null)
     setReceipt(transaction)
-    setToast('Operación completada')
+    setToast('Simulación completada')
     window.setTimeout(() => setToast(''), 2400)
   }
 
-  if (!state.user) return <Welcome onCreate={createUser} onDemo={loadDemo} />
+  if (mode === 'checking' || mode === 'signed-out' || !state.user) {
+    return <Welcome onRegister={register} onLogin={login} onDemo={loadDemo} checking={mode === 'checking'} connectionError={connectionError} onRetry={() => void restoreSession()} />
+  }
 
   return (
     <div className="app-shell">
@@ -417,10 +531,10 @@ export default function App() {
         {tab === 'activity' && <ActivityPage transactions={state.transactions} openReceipt={setReceipt} />}
         {tab === 'services' && <ServicesPage state={state} openAction={setAction} />}
         {tab === 'cards' && <CardsPage />}
-        {tab === 'profile' && <ProfilePage user={state.user} onReset={reset} />}
+        {tab === 'profile' && <ProfilePage user={state.user} onReset={reset} logoutLabel={mode === 'demo' ? 'Salir y borrar datos demo' : 'Cerrar sesión'} />}
       </main>
       <MobileNav tab={tab} setTab={setTab} onPay={() => setAction('pay')} />
-      {action && <ActionModal action={action} state={state} onClose={() => setAction(null)} onTransaction={addTransaction} />}
+      {action && <ActionModal action={action} state={state} demoMode={mode === 'demo'} onClose={() => setAction(null)} onTransaction={addTransaction} />}
       {receipt && <ReceiptModal item={receipt} onClose={() => setReceipt(null)} />}
       {toast && <div className="toast"><CheckIcon />{toast}</div>}
     </div>
