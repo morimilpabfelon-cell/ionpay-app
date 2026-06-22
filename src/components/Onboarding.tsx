@@ -209,6 +209,16 @@ function Onboarding({
                 : 'Iniciar sesión'}{' '}
               {!submitting && <ChevronIcon />}
             </button>
+            <button
+              className="secondary-button auth-login-button"
+              type="button"
+              onClick={() => {
+                setError('')
+                setStep(step === 'register' ? 'login' : 'register')
+              }}
+            >
+              {step === 'register' ? 'Ya tengo una cuenta' : 'Crear una cuenta'}
+            </button>
             <small>
               La autenticación utiliza la API local. No ingreses credenciales
               financieras reales.
