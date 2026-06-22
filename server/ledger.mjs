@@ -1,0 +1,56 @@
+import { randomUUID } from 'node:crypto'
+
+export class LedgerError extends Error {
+  constructor(message, code = 'LEDGER_ERROR') {
+    super(message)
+    this.code = code
+  }
+}
+
+export function createLedger(db) {
+  const accountById = db.prepare('SELECT * FROM accounts WHERE id = ?')
+  const insertTransaction = db.prepare(`INSERT INTO ledger_transactions (id, type, status, reference, metadata_json, created_at) VALUES (?, ?, 'COMPLETED', ?, ?, ?)`)
+  const insertEntry = db.prepare(`INSERT INTO ledger_entries (id, transaction_id, account_id, currency, amount, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
+  const updateBalance = db.prepare('UPDATE accounts SET balance = ? WHERE id = ?')
+
+  function post({ type, reference, entries, metadata = {} }) {
+    if (!Array.isArray(entries) || entries.length < 2) throw new LedgerError('Una operación requiere al menos dos asientos.')
+
+    const sums = new Map()
+    for (const entry of entries) {
+      if (!Number.isSafeInteger(entry.amount) || entry.amount === 0) throw new LedgerError('Monto contable inválido.')
+      sums.set(entry.currency, (sums.get(entry.currency) ?? 0) + entry.amount)
+    }
+    for (const [currency, sum] of sums) {
+      if (sum !== 0) throw new LedgerError(`La operación no cuadra para ${currency}.`, 'UNBALANCED_LEDGER')
+    }
+
+    const transactionId = randomUUID()
+    const createdAt = new Date().toISOString()
+
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const resolved = entries.map((entry) => {
+        const account = accountById.get(entry.accountId)
+        if (!account) throw new LedgerError('Cuenta contable no encontrada.', 'ACCOUNT_NOT_FOUND')
+        if (account.currency !== entry.currency) throw new LedgerError('La moneda no corresponde a la cuenta.')
+        const nextBalance = account.balance + entry.amount
+        if (account.owner_type === 'USER' && nextBalance < 0) throw new LedgerError('Saldo insuficiente.', 'INSUFFICIENT_FUNDS')
+        return { entry, account, nextBalance }
+      })
+
+      insertTransaction.run(transactionId, type, reference, JSON.stringify(metadata), createdAt)
+      for (const item of resolved) {
+        updateBalance.run(item.nextBalance, item.account.id)
+        insertEntry.run(randomUUID(), transactionId, item.account.id, item.entry.currency, item.entry.amount, createdAt)
+      }
+      db.exec('COMMIT')
+      return { id: transactionId, reference, status: 'COMPLETED', createdAt }
+    } catch (error) {
+      db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  return { post }
+}
