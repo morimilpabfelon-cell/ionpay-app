@@ -2,6 +2,33 @@ export type Currency = 'PEN' | 'USDT'
 export type TransactionKind = 'receive' | 'send' | 'payment' | 'conversion'
 export type TransactionStatus = 'Completado' | 'Pendiente' | 'En revisión'
 
+export type ApiKycStatus = 'PENDING' | 'VERIFIED'
+
+export interface User {
+  id: string
+  name: string
+  phone: string
+  alias: string
+  kycStatus: ApiKycStatus
+  createdAt: string
+}
+
+export interface Session {
+  token: string
+  expiresAt: string
+}
+
+export interface Balance {
+  PEN: number
+  USDT: number
+}
+
+export interface ApiError {
+  status: number
+  code: string
+  message: string
+}
+
 export interface IonUser {
   name: string
   phone: string

@@ -64,6 +64,11 @@ svg { width: 22px; height: 22px; }
 .secondary-button { width: 100%; color: var(--ink); background: #edf2ee; }
 .text-button { width: 100%; color: var(--ink); background: transparent; border: 0; padding: 20px; font-weight: 700; }
 .demo-caption { text-align: center; font-size: 11px; color: #a0aaae; border-top: 1px solid var(--line); padding-top: 20px; }
+.auth-login-button { width: 100%; margin-top: 10px; }
+.connection-note { display: flex; align-items: center; gap: 9px; padding: 12px 14px; margin-bottom: 16px; border-radius: 12px; background: #f2f6f5; color: var(--muted); font-size: 12px; }
+.connection-note i { width: 8px; height: 8px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 4px rgba(188, 255, 49, .2); }
+.api-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.api-error button { color: inherit; font-weight: 800; text-decoration: underline; white-space: nowrap; }
 .back-button { border: 0; background: none; padding: 0 0 24px; color: var(--muted); }
 .auth-box small { color: #99a4a8; display: block; text-align: center; line-height: 1.5; margin-top: 18px; }
 
@@ -399,6 +404,7 @@ svg { width: 22px; height: 22px; }
 .conversion-preview span, .conversion-preview small { color: #809087; font-size: 10px; }
 .conversion-preview strong { color: #31570b; font-size: 18px; }
 .form-error { color: #b84d40; background: #fff0ed; padding: 11px 13px; border-radius: 10px; font-size: 11px; margin-bottom: 14px; }
+.api-pending-operation { margin: 22px 0; }
 .safe-caption { display: flex; justify-content: center; align-items: center; gap: 7px; color: #8a999d; font-size: 10px; margin-top: 16px; }
 .safe-caption svg { width: 14px; }
 .receive-panel { text-align: center; }
