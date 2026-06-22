@@ -2,6 +2,16 @@
 
 Inventario de las 30 referencias visuales agregadas para ionPAY V1. Los nombres originales se conservan: las propuestas de nombre son orientativas y **no se han aplicado**.
 
+## Declaración de datos ficticios
+
+Todas las imágenes incluidas en esta carpeta son **maquetas visuales** y referencias de diseño. No contienen datos reales de usuarios.
+
+Cualquier nombre, teléfono, correo electrónico, documento, rostro, código QR, Wallet ID, Account ID, saldo, número de tarjeta, ubicación, referencia de pago o identificador visible dentro de estas imágenes debe tratarse como **dato ficticio de mockup**.
+
+Estas imágenes no son assets finales de producción. Sirven únicamente para guiar decisiones visuales, arquitectura de pantallas, jerarquía de información y flujos de ionPAY V1.
+
+Si este repositorio o estas referencias se publican externamente en el futuro, las imágenes deberán revisarse nuevamente antes de cualquier publicación pública o uso comercial.
+
 ## Resumen
 
 | Categoría | Cantidad |
@@ -38,11 +48,11 @@ No hay una referencia que pueda identificarse claramente como pantalla de **Demo
 | [`photo_13_2026-06-22_10-47-55.jpg`](./photo_13_2026-06-22_10-47-55.jpg) | Services | Agregar dinero mediante banco, débito o transferencia local | Selector de método de fondeo | `service-add-money-methods.jpg` |
 | [`photo_14_2026-06-22_10-47-55.jpg`](./photo_14_2026-06-22_10-47-55.jpg) | Services | Tarjeta virtual PEN, controles, límites y actividad | Ion Card y controles rápidos | `service-card-controls-pen.jpg` |
 | [`photo_15_2026-06-22_10-47-55.jpg`](./photo_15_2026-06-22_10-47-55.jpg) | Services | Tarjeta virtual USD con límites y tarjeta desechable | Variación de Ion Card; no usar como regla de moneda V1 | `service-card-controls-usd.jpg` |
-| [`photo_16_2026-06-22_10-47-55.jpg`](./photo_16_2026-06-22_10-47-55.jpg) | Devices / Security | Verificación por niveles e Identity Review con documento y selfie | KYC progresivo; requiere revisar datos visibles antes de uso público | `security-account-verification-identity-review.jpg` |
+| [`photo_16_2026-06-22_10-47-55.jpg`](./photo_16_2026-06-22_10-47-55.jpg) | Devices / Security | Verificación por niveles e Identity Review con documento y selfie ficticios | KYC progresivo; usar solo como referencia visual de flujo, no como dato real | `security-account-verification-identity-review.jpg` |
 | [`photo_17_2026-06-22_10-47-55.jpg`](./photo_17_2026-06-22_10-47-55.jpg) | Services | Vinculación y estado de IonExchange con KYC coincidente | IonExchange Link y separación fiat/USDT | `service-ionexchange-link-status.jpg` |
 | [`photo_18_2026-06-22_10-47-55.jpg`](./photo_18_2026-06-22_10-47-55.jpg) | Services | Tarjeta principal y creación de tarjeta desechable | Ion Card / Disposable Card | `service-cards-disposable-card.jpg` |
 | [`photo_19_2026-06-22_10-47-55.jpg`](./photo_19_2026-06-22_10-47-55.jpg) | Services | Panel Merchant y formulario Collect Payment | Ion Merchant, cobros y métodos comerciales | `service-merchant-collect-payment.jpg` |
-| [`photo_20_2026-06-22_10-47-55.jpg`](./photo_20_2026-06-22_10-47-55.jpg) | Services | Dashboard Checkout y creación de checkout con email de cliente | Ion Checkout; confirmar que el email sea ficticio | `service-checkout-create-checkout.jpg` |
+| [`photo_20_2026-06-22_10-47-55.jpg`](./photo_20_2026-06-22_10-47-55.jpg) | Services | Dashboard Checkout y creación de checkout con email ficticio de cliente | Ion Checkout; flujo de creación de checkout | `service-checkout-create-checkout.jpg` |
 | [`photo_21_2026-06-22_10-47-55.jpg`](./photo_21_2026-06-22_10-47-55.jpg) | Devices / Security | Límites por operación y centro de seguridad/dispositivo | Ion Limits y estado de protección | `security-limits-security-overview.jpg` |
 | [`photo_22_2026-06-22_10-47-55.jpg`](./photo_22_2026-06-22_10-47-55.jpg) | Services | Panel Merchant junto a selección de método en Checkout | Relación Merchant → Checkout | `service-merchant-checkout-flow.jpg` |
 | [`photo_23_2026-06-22_10-47-55.jpg`](./photo_23_2026-06-22_10-47-55.jpg) | Devices / Security | Límites diarios/mensuales y controles de seguridad | Arquitectura de Ion Limits e Ion Safe | `security-limits-protection.jpg` |
@@ -54,25 +64,25 @@ No hay una referencia que pueda identificarse claramente como pantalla de **Demo
 | [`photo_29_2026-06-22_10-47-55.jpg`](./photo_29_2026-06-22_10-47-55.jpg) | Otros / pendientes de clasificar | App icon y wordmark ionPAY sobre mockup de iPhone | Identidad visual e iconografía; no es pantalla funcional | `other-app-icon-wordmark.jpg` |
 | [`photo_30_2026-06-22_10-47-55.jpg`](./photo_30_2026-06-22_10-47-55.jpg) | Otros / pendientes de clasificar | Lámina general con ocho pantallas y principios de producto | Índice visual y referencia de dirección V1 | `other-v1-reference-board.jpg` |
 
-## Revisión de datos sensibles
+## Datos ficticios visibles en mockups
 
-No se observaron tokens, API keys, contraseñas, secretos ni números completos de tarjeta. Los números de tarjeta visibles están enmascarados. Tampoco se detectaron propiedades EXIF básicas de GPS, autor, comentario o copyright.
+No se observaron tokens, API keys, contraseñas, secretos ni números completos de tarjeta. Los números de tarjeta visibles están enmascarados y forman parte del diseño de maqueta. Tampoco se detectaron propiedades EXIF básicas de GPS, autor, comentario o copyright.
 
-Varias imágenes contienen datos que **parecen ficticios**, pero deben confirmarse antes de publicar el repositorio o reutilizar los mockups externamente:
+Las siguientes imágenes muestran datos visibles que son **ficticios** y forman parte del mockup visual:
 
-- `photo_16_2026-06-22_10-47-55.jpg`: rostro, documento de identidad, fecha de nacimiento y número de identificación. Es la referencia de mayor riesgo.
-- `photo_6_2026-06-22_10-47-55.jpg`: nombre, teléfono y Account ID.
-- `photo_8_2026-06-22_10-47-55.jpg`: nombre, URL/IonPay ID, número de cuenta y QR.
-- `photo_10_2026-06-22_10-47-55.jpg`: IonTag, Wallet ID, cuenta enmascarada y QR.
-- `photo_12_2026-06-22_10-47-55.jpg`: nombre, IonTag y QR.
-- `photo_17_2026-06-22_10-47-55.jpg`: nombre y DNI enmascarado.
+- `photo_16_2026-06-22_10-47-55.jpg`: rostro, documento de identidad, fecha de nacimiento y número de identificación ficticios para representar KYC progresivo.
+- `photo_6_2026-06-22_10-47-55.jpg`: nombre, teléfono y Account ID ficticios.
+- `photo_8_2026-06-22_10-47-55.jpg`: nombre, URL/IonPay ID, número de cuenta y QR ficticios.
+- `photo_10_2026-06-22_10-47-55.jpg`: IonTag, Wallet ID, cuenta enmascarada y QR ficticios.
+- `photo_12_2026-06-22_10-47-55.jpg`: nombre, IonTag y QR ficticios.
+- `photo_17_2026-06-22_10-47-55.jpg`: nombre y DNI enmascarado ficticio.
 - `photo_18_2026-06-22_10-47-55.jpg`: nombre y últimos cuatro dígitos de tarjetas de maqueta.
-- `photo_20_2026-06-22_10-47-55.jpg`: email `alex.carter@mail.com`.
-- `photo_25_2026-06-22_10-47-55.jpg`: nombres, ubicación de dispositivo y email de soporte.
-- `photo_27_2026-06-22_10-47-55.jpg`: modelos de dispositivos y ubicaciones Lima/Arequipa.
-- Recibos y actividad (`photo_3`, `photo_5`, `photo_7`, `photo_9`, `photo_11`, `photo_26`) muestran nombres, importes y referencias aparentemente simulados.
+- `photo_20_2026-06-22_10-47-55.jpg`: email ficticio `alex.carter@mail.com`.
+- `photo_25_2026-06-22_10-47-55.jpg`: nombres, ubicación de dispositivo y email de soporte ficticios.
+- `photo_27_2026-06-22_10-47-55.jpg`: modelos de dispositivos y ubicaciones ficticias Lima/Arequipa.
+- Recibos y actividad (`photo_3`, `photo_5`, `photo_7`, `photo_9`, `photo_11`, `photo_26`) muestran nombres, importes y referencias simulados.
 
-Los QR de `photo_8`, `photo_10` y `photo_12` no se han validado ni decodificado; deben considerarse potencialmente identificadores hasta confirmar su contenido.
+Los QR de `photo_8`, `photo_10` y `photo_12` deben tratarse como QR de mockup. No deben usarse como identificadores reales ni como recursos funcionales de producción.
 
 ## Tamaño y dimensiones
 
@@ -85,7 +95,7 @@ Los QR de `photo_8`, `photo_10` y `photo_12` no se han validado ni decodificado;
 ## Recomendación de organización
 
 1. **Mantener por ahora los nombres actuales** para conservar trazabilidad con la carga original.
-2. Confirmar que todos los nombres, documentos, emails, teléfonos, números de cuenta y QR son completamente sintéticos.
-3. Después de esa confirmación, aprobar en un cambio separado los nombres sugeridos de la tabla.
+2. Mantener la declaración de datos ficticios como referencia obligatoria antes de usar estas imágenes en futuras tareas de diseño.
+3. Después de aprobar la dirección visual, renombrar las imágenes sugeridas de la tabla en un cambio separado.
 4. Reorganizar en subcarpetas solo si el volumen crece; con 30 archivos y este índice, una carpeta única sigue siendo manejable.
 5. No comprimir ni transformar las imágenes hasta acordar cuál será la referencia definitiva de cada flujo.
