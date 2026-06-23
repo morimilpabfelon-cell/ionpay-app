@@ -1,5 +1,5 @@
 import { createServer } from 'node:http'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { createDatabase } from './db.mjs'
 import { createLedger, LedgerError } from './ledger.mjs'
 import { MoneyError, multiplyDivideMinor, parseDecimalMinor, parsePenMinor } from './money.mjs'
@@ -16,7 +16,7 @@ class ApiError extends Error {
 const jsonHeaders = {
   'Content-Type': 'application/json; charset=utf-8',
   'Access-Control-Allow-Origin': 'http://127.0.0.1:5173',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Idempotency-Key',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 }
 
@@ -50,6 +50,27 @@ function reference() {
   return `ION-${randomUUID().replaceAll('-', '').slice(0, 10).toUpperCase()}`
 }
 
+function requireIdempotencyKey(request) {
+  const key = request.headers['idempotency-key']
+  if (key === undefined) throw new ApiError(400, 'IDEMPOTENCY_KEY_REQUIRED', 'La operación requiere Idempotency-Key.')
+  if (typeof key !== 'string' || !/^[A-Za-z0-9._:-]{8,128}$/.test(key)) {
+    throw new ApiError(400, 'INVALID_IDEMPOTENCY_KEY', 'Idempotency-Key no es válida.')
+  }
+  return key
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+function requestFingerprint(endpoint, payload) {
+  return createHash('sha256').update(stableJson({ endpoint, payload })).digest('hex')
+}
+
 export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true } = {}) {
   const db = createDatabase(dbPath)
   const ledger = createLedger(db)
@@ -61,6 +82,12 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
   const findAccount = db.prepare(`SELECT * FROM accounts WHERE owner_type = ? AND owner_id = ? AND currency = ? AND kind = ?`)
   const insertSession = db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)')
   const findSession = db.prepare(`SELECT users.* FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token_hash = ? AND sessions.expires_at > ?`)
+  const findIdempotencyRecord = db.prepare('SELECT * FROM idempotency_records WHERE owner_id = ? AND idempotency_key = ?')
+  const insertIdempotencyRecord = db.prepare(`
+    INSERT INTO idempotency_records
+      (id, owner_id, idempotency_key, endpoint, request_hash, status_code, response_json, transaction_id, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
 
   function createSession(userId) {
     const token = newSessionToken()
@@ -86,6 +113,42 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
   function walletFor(userId) {
     const rows = db.prepare(`SELECT currency, balance FROM accounts WHERE owner_type = 'USER' AND owner_id = ? AND currency = 'PEN' AND kind = 'AVAILABLE'`).all(userId)
     return Object.fromEntries(rows.map((row) => [row.currency, row.balance / 100]))
+  }
+
+  function executeIdempotent({ ownerId, key, endpoint, payload, operation }) {
+    const requestHash = requestFingerprint(endpoint, payload)
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const existing = findIdempotencyRecord.get(ownerId, key)
+      if (existing) {
+        if (existing.endpoint !== endpoint || existing.request_hash !== requestHash) {
+          throw new ApiError(409, 'IDEMPOTENCY_KEY_REUSED', 'Idempotency-Key ya fue utilizada para otra operación.')
+        }
+        const replay = { status: existing.status_code, data: JSON.parse(existing.response_json) }
+        db.exec('COMMIT')
+        return replay
+      }
+
+      const result = operation()
+      const now = new Date().toISOString()
+      insertIdempotencyRecord.run(
+        randomUUID(),
+        ownerId,
+        key,
+        endpoint,
+        requestHash,
+        result.status,
+        JSON.stringify(result.data),
+        result.transactionId ?? null,
+        now,
+        now,
+      )
+      db.exec('COMMIT')
+      return { status: result.status, data: result.data }
+    } catch (error) {
+      if (db.isTransaction) db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   const handler = async (request, response) => {
@@ -162,16 +225,27 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
       if (request.method === 'POST' && url.pathname === '/api/transfers') {
         const user = authenticate(request)
         requireVerified(user)
+        const idempotencyKey = requireIdempotencyKey(request)
         const body = await readBody(request)
         const recipientAlias = requiredText(body.recipientAlias, 'Destinatario', 3).toLowerCase().replace(/^@/, '')
-        const recipient = findUserByAlias.get(recipientAlias)
-        if (!recipient) throw new ApiError(404, 'RECIPIENT_NOT_FOUND', 'No encontramos al destinatario.')
-        if (recipient.id === user.id) throw new ApiError(400, 'SAME_ACCOUNT', 'No puedes enviarte dinero a ti mismo.')
         const amount = parsePenMinor(body.amount)
-        const senderAccount = findAccount.get('USER', user.id, 'PEN', 'AVAILABLE')
-        const recipientAccount = findAccount.get('USER', recipient.id, 'PEN', 'AVAILABLE')
-        const transaction = ledger.post({ type: 'TRANSFER', reference: reference(), entries: [{ accountId: senderAccount.id, currency: 'PEN', amount: -amount }, { accountId: recipientAccount.id, currency: 'PEN', amount }], metadata: { senderAlias: user.alias, recipientAlias: recipient.alias, note: typeof body.note === 'string' ? body.note.slice(0, 120) : '' } })
-        return send(response, 201, { transaction, balances: walletFor(user.id) })
+        const note = typeof body.note === 'string' ? body.note.slice(0, 120) : ''
+        const result = executeIdempotent({
+          ownerId: user.id,
+          key: idempotencyKey,
+          endpoint: url.pathname,
+          payload: { amount, note, recipientAlias },
+          operation: () => {
+            const recipient = findUserByAlias.get(recipientAlias)
+            if (!recipient) throw new ApiError(404, 'RECIPIENT_NOT_FOUND', 'No encontramos al destinatario.')
+            if (recipient.id === user.id) throw new ApiError(400, 'SAME_ACCOUNT', 'No puedes enviarte dinero a ti mismo.')
+            const senderAccount = findAccount.get('USER', user.id, 'PEN', 'AVAILABLE')
+            const recipientAccount = findAccount.get('USER', recipient.id, 'PEN', 'AVAILABLE')
+            const transaction = ledger.postWithinTransaction({ type: 'TRANSFER', reference: reference(), entries: [{ accountId: senderAccount.id, currency: 'PEN', amount: -amount }, { accountId: recipientAccount.id, currency: 'PEN', amount }], metadata: { senderAlias: user.alias, recipientAlias: recipient.alias, note } })
+            return { status: 201, data: { transaction, balances: walletFor(user.id) }, transactionId: transaction.id }
+          },
+        })
+        return send(response, result.status, result.data)
       }
 
       if (request.method === 'POST' && url.pathname === '/api/conversions') {
@@ -203,12 +277,22 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
 
       if (demoMode && request.method === 'POST' && url.pathname === '/api/demo/fund') {
         const user = authenticate(request)
+        const idempotencyKey = requireIdempotencyKey(request)
         const body = await readBody(request)
         const amount = parsePenMinor(body.amount)
-        const treasury = findAccount.get('SYSTEM', 'IONPAY', 'PEN', 'TREASURY')
-        const userAccount = findAccount.get('USER', user.id, 'PEN', 'AVAILABLE')
-        const transaction = ledger.post({ type: 'DEMO_FUNDING', reference: reference(), entries: [{ accountId: treasury.id, currency: 'PEN', amount: -amount }, { accountId: userAccount.id, currency: 'PEN', amount }], metadata: { demo: true } })
-        return send(response, 201, { transaction, balances: walletFor(user.id) })
+        const result = executeIdempotent({
+          ownerId: user.id,
+          key: idempotencyKey,
+          endpoint: url.pathname,
+          payload: { amount },
+          operation: () => {
+            const treasury = findAccount.get('SYSTEM', 'IONPAY', 'PEN', 'TREASURY')
+            const userAccount = findAccount.get('USER', user.id, 'PEN', 'AVAILABLE')
+            const transaction = ledger.postWithinTransaction({ type: 'DEMO_FUNDING', reference: reference(), entries: [{ accountId: treasury.id, currency: 'PEN', amount: -amount }, { accountId: userAccount.id, currency: 'PEN', amount }], metadata: { demo: true } })
+            return { status: 201, data: { transaction, balances: walletFor(user.id) }, transactionId: transaction.id }
+          },
+        })
+        return send(response, result.status, result.data)
       }
 
       throw new ApiError(404, 'NOT_FOUND', 'Ruta no encontrada.')

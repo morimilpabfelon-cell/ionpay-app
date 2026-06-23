@@ -57,9 +57,24 @@ export function createDatabase(dbPath = 'data/ionpay.db') {
       created_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS idempotency_records (
+      id TEXT PRIMARY KEY,
+      owner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      idempotency_key TEXT NOT NULL,
+      endpoint TEXT NOT NULL,
+      request_hash TEXT NOT NULL,
+      status_code INTEGER NOT NULL,
+      response_json TEXT NOT NULL,
+      transaction_id TEXT REFERENCES ledger_transactions(id),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(owner_id, idempotency_key)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_entries_transaction ON ledger_entries(transaction_id);
     CREATE INDEX IF NOT EXISTS idx_entries_account ON ledger_entries(account_id);
+    CREATE INDEX IF NOT EXISTS idx_idempotency_transaction ON idempotency_records(transaction_id);
   `)
 
   const now = new Date().toISOString()

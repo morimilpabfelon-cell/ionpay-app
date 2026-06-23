@@ -13,7 +13,7 @@ export function createLedger(db) {
   const insertEntry = db.prepare(`INSERT INTO ledger_entries (id, transaction_id, account_id, currency, amount, created_at) VALUES (?, ?, ?, ?, ?, ?)`)
   const updateBalance = db.prepare('UPDATE accounts SET balance = ? WHERE id = ?')
 
-  function post({ type, reference, entries, metadata = {} }) {
+  function postEntries({ type, reference, entries, metadata = {} }) {
     if (!Array.isArray(entries) || entries.length < 2) throw new LedgerError('Una operación requiere al menos dos asientos.')
 
     const grouped = new Map()
@@ -40,31 +40,41 @@ export function createLedger(db) {
     const transactionId = randomUUID()
     const createdAt = new Date().toISOString()
 
+    const resolved = consolidated.map((entry) => {
+      const account = accountById.get(entry.accountId)
+      if (!account) throw new LedgerError('Cuenta contable no encontrada.', 'ACCOUNT_NOT_FOUND')
+      if (account.currency !== entry.currency) throw new LedgerError('La moneda no corresponde a la cuenta.')
+      if (!Number.isSafeInteger(account.balance)) throw new LedgerError('Saldo contable fuera del rango seguro.')
+      const nextBalance = account.balance + entry.amount
+      if (!Number.isSafeInteger(nextBalance)) throw new LedgerError('El saldo contable excede el rango seguro.')
+      if (account.owner_type === 'USER' && nextBalance < 0) throw new LedgerError('Saldo insuficiente.', 'INSUFFICIENT_FUNDS')
+      return { entry, account, nextBalance }
+    })
+
+    insertTransaction.run(transactionId, type, reference, JSON.stringify(metadata), createdAt)
+    for (const item of resolved) {
+      updateBalance.run(item.nextBalance, item.account.id)
+      insertEntry.run(randomUUID(), transactionId, item.account.id, item.entry.currency, item.entry.amount, createdAt)
+    }
+    return { id: transactionId, reference, status: 'COMPLETED', createdAt }
+  }
+
+  function post(operation) {
     db.exec('BEGIN IMMEDIATE')
     try {
-      const resolved = consolidated.map((entry) => {
-        const account = accountById.get(entry.accountId)
-        if (!account) throw new LedgerError('Cuenta contable no encontrada.', 'ACCOUNT_NOT_FOUND')
-        if (account.currency !== entry.currency) throw new LedgerError('La moneda no corresponde a la cuenta.')
-        if (!Number.isSafeInteger(account.balance)) throw new LedgerError('Saldo contable fuera del rango seguro.')
-        const nextBalance = account.balance + entry.amount
-        if (!Number.isSafeInteger(nextBalance)) throw new LedgerError('El saldo contable excede el rango seguro.')
-        if (account.owner_type === 'USER' && nextBalance < 0) throw new LedgerError('Saldo insuficiente.', 'INSUFFICIENT_FUNDS')
-        return { entry, account, nextBalance }
-      })
-
-      insertTransaction.run(transactionId, type, reference, JSON.stringify(metadata), createdAt)
-      for (const item of resolved) {
-        updateBalance.run(item.nextBalance, item.account.id)
-        insertEntry.run(randomUUID(), transactionId, item.account.id, item.entry.currency, item.entry.amount, createdAt)
-      }
+      const transaction = postEntries(operation)
       db.exec('COMMIT')
-      return { id: transactionId, reference, status: 'COMPLETED', createdAt }
+      return transaction
     } catch (error) {
       db.exec('ROLLBACK')
       throw error
     }
   }
 
-  return { post }
+  function postWithinTransaction(operation) {
+    if (!db.isTransaction) throw new LedgerError('La operación contable requiere una transacción activa.', 'TRANSACTION_REQUIRED')
+    return postEntries(operation)
+  }
+
+  return { post, postWithinTransaction }
 }
