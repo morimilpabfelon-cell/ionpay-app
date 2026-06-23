@@ -20,6 +20,8 @@ const jsonHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
 }
 
+const CONVERSIONS_AVAILABLE_IN_V1 = false
+
 function send(response, status, data) {
   response.writeHead(status, jsonHeaders)
   response.end(JSON.stringify(data))
@@ -82,7 +84,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
   }
 
   function walletFor(userId) {
-    const rows = db.prepare(`SELECT currency, balance FROM accounts WHERE owner_type = 'USER' AND owner_id = ? AND kind = 'AVAILABLE'`).all(userId)
+    const rows = db.prepare(`SELECT currency, balance FROM accounts WHERE owner_type = 'USER' AND owner_id = ? AND currency = 'PEN' AND kind = 'AVAILABLE'`).all(userId)
     return Object.fromEntries(rows.map((row) => [row.currency, row.balance / 100]))
   }
 
@@ -148,6 +150,8 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
           JOIN ledger_entries e ON e.transaction_id = t.id
           JOIN accounts a ON a.id = e.account_id
           WHERE a.owner_type = 'USER' AND a.owner_id = ?
+            AND t.type != 'CONVERSION'
+            AND e.currency = 'PEN'
           ORDER BY t.created_at DESC
           LIMIT ?
         `).all(user.id, limit)
@@ -172,6 +176,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
 
       if (request.method === 'POST' && url.pathname === '/api/conversions') {
         const user = authenticate(request)
+        if (!CONVERSIONS_AVAILABLE_IN_V1) throw new ApiError(409, 'FEATURE_NOT_AVAILABLE', 'La conversión no está disponible en esta versión.')
         requireVerified(user)
         const body = await readBody(request)
         const from = body.fromCurrency

@@ -1,13 +1,17 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import { createIonPayServer } from '../app.mjs'
 import { createDatabase } from '../db.mjs'
 import { createLedger, LedgerError } from '../ledger.mjs'
-import { MoneyError, parsePenMinor } from '../money.mjs'
+import { MoneyError, multiplyDivideMinor, parsePenMinor } from '../money.mjs'
 
-async function startApi() {
-  const app = createIonPayServer({ dbPath: ':memory:', demoMode: true })
+async function startApi({ dbPath = ':memory:' } = {}) {
+  const app = createIonPayServer({ dbPath, demoMode: true })
   const address = await app.listen(0)
   const baseUrl = `http://127.0.0.1:${address.port}`
 
@@ -26,7 +30,7 @@ async function startApi() {
   return { app, request }
 }
 
-test('flujo financiero: registro, KYC, fondeo, envío y conversión', async (context) => {
+test('flujo financiero V1: registro, KYC, fondeo, envío y actividad PEN', async (context) => {
   const { app, request } = await startApi()
   context.after(() => app.close())
 
@@ -60,17 +64,18 @@ test('flujo financiero: registro, KYC, fondeo, envío y conversión', async (con
 
   const funding = await request('/api/demo/fund', { method: 'POST', token: alice.data.token, body: { amount: '1000.00' } })
   assert.equal(funding.status, 201)
-  assert.deepEqual(funding.data.balances, { PEN: 1000, USDT: 0 })
+  assert.deepEqual(funding.data.balances, { PEN: 1000 })
 
   const transfer = await request('/api/transfers', {
     method: 'POST', token: alice.data.token, body: { recipientAlias: '@bob.ion', amount: '125.50', note: 'Prueba' },
   })
   assert.equal(transfer.status, 201)
   assert.equal(transfer.data.transaction.status, 'COMPLETED')
-  assert.deepEqual(transfer.data.balances, { PEN: 874.5, USDT: 0 })
+  assert.deepEqual(transfer.data.balances, { PEN: 874.5 })
 
   const bobWallet = await request('/api/wallet', { token: bob.data.token })
-  assert.deepEqual(bobWallet.data.balances, { PEN: 125.5, USDT: 0 })
+  assert.deepEqual(bobWallet.data.balances, { PEN: 125.5 })
+  assert.equal(Object.hasOwn(bobWallet.data.balances, 'USDT'), false)
 
   const insufficient = await request('/api/transfers', {
     method: 'POST', token: alice.data.token, body: { recipientAlias: 'bob.ion', amount: '5000.00' },
@@ -78,17 +83,140 @@ test('flujo financiero: registro, KYC, fondeo, envío y conversión', async (con
   assert.equal(insufficient.status, 409)
   assert.equal(insufficient.data.error.code, 'INSUFFICIENT_FUNDS')
 
-  const conversion = await request('/api/conversions', {
-    method: 'POST', token: alice.data.token, body: { fromCurrency: 'PEN', amount: '375.00' },
-  })
-  assert.equal(conversion.status, 201)
-  assert.equal(conversion.data.received, 100)
-  assert.deepEqual(conversion.data.balances, { PEN: 499.5, USDT: 100 })
-
   const activity = await request('/api/activity', { token: alice.data.token })
   assert.equal(activity.status, 200)
   assert.ok(activity.data.activity.some((item) => item.type === 'TRANSFER' && item.amount === -125.5))
-  assert.ok(activity.data.activity.some((item) => item.type === 'CONVERSION' && item.currency === 'USDT' && item.amount === 100))
+})
+
+test('superficie V1 conserva cuentas USDT internas y bloquea conversiones sin crear ledger', async (context) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ionpay-v1-surface-'))
+  const dbPath = join(directory, 'ionpay.db')
+  const { app, request } = await startApi({ dbPath })
+  context.after(async () => {
+    await app.close()
+    rmSync(directory, { recursive: true, force: true })
+  })
+
+  const withoutToken = await request('/api/conversions', {
+    method: 'POST', body: { fromCurrency: 'PEN', amount: '1.00' },
+  })
+  assert.equal(withoutToken.status, 401)
+  assert.equal(withoutToken.data.error.code, 'UNAUTHORIZED')
+
+  const invalidToken = await request('/api/conversions', {
+    method: 'POST', token: 'token-invalido', body: { fromCurrency: 'PEN', amount: '1.00' },
+  })
+  assert.equal(invalidToken.status, 401)
+  assert.equal(invalidToken.data.error.code, 'INVALID_SESSION')
+
+  const registration = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Surface Test', phone: '+51977777777', alias: 'surface.test', password: 'ClaveSegura123' },
+  })
+  assert.equal(registration.status, 201)
+  const recipient = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Recipient Test', phone: '+51988888888', alias: 'recipient.test', password: 'ClaveSegura123' },
+  })
+  assert.equal(recipient.status, 201)
+
+  const internalDb = new DatabaseSync(dbPath, { readOnly: true })
+  const internalAccounts = internalDb.prepare(`
+    SELECT currency, balance
+    FROM accounts
+    WHERE owner_type = 'USER' AND owner_id = ? AND kind = 'AVAILABLE'
+    ORDER BY currency
+  `).all(registration.data.user.id)
+  internalDb.close()
+  assert.deepEqual(internalAccounts.map((account) => account.currency), ['PEN', 'USDT'])
+
+  const wallet = await request('/api/wallet', { token: registration.data.token })
+  assert.equal(wallet.status, 200)
+  assert.deepEqual(wallet.data.balances, { PEN: 0 })
+  assert.equal(Object.hasOwn(wallet.data.balances, 'USDT'), false)
+
+  const unverifiedConversion = await request('/api/conversions', {
+    method: 'POST', token: registration.data.token, body: { fromCurrency: 'PEN', amount: '1.00' },
+  })
+  assert.equal(unverifiedConversion.status, 409)
+  assert.equal(unverifiedConversion.data.error.code, 'FEATURE_NOT_AVAILABLE')
+
+  await request('/api/demo/verify', { method: 'POST', token: registration.data.token })
+  await request('/api/demo/verify', { method: 'POST', token: recipient.data.token })
+
+  const funding = await request('/api/demo/fund', {
+    method: 'POST', token: registration.data.token, body: { amount: '1000.00' },
+  })
+  assert.equal(funding.status, 201)
+
+  const historicalDb = new DatabaseSync(dbPath)
+  const historicalLedger = createLedger(historicalDb)
+  const accountByCurrency = historicalDb.prepare(`
+    SELECT id FROM accounts
+    WHERE owner_type = ? AND owner_id = ? AND currency = ? AND kind = ?
+  `)
+  const userPen = accountByCurrency.get('USER', registration.data.user.id, 'PEN', 'AVAILABLE')
+  const userUsdt = accountByCurrency.get('USER', registration.data.user.id, 'USDT', 'AVAILABLE')
+  const treasuryPen = accountByCurrency.get('SYSTEM', 'IONPAY', 'PEN', 'TREASURY')
+  const treasuryUsdt = accountByCurrency.get('SYSTEM', 'IONPAY', 'USDT', 'TREASURY')
+  historicalLedger.post({
+    type: 'CONVERSION',
+    reference: `HISTORICAL-${randomUUID()}`,
+    entries: [
+      { accountId: userPen.id, currency: 'PEN', amount: -37_500 },
+      { accountId: treasuryPen.id, currency: 'PEN', amount: 37_500 },
+      { accountId: treasuryUsdt.id, currency: 'USDT', amount: -10_000 },
+      { accountId: userUsdt.id, currency: 'USDT', amount: 10_000 },
+    ],
+    metadata: { historical: true },
+  })
+  historicalDb.close()
+
+  const transfer = await request('/api/transfers', {
+    method: 'POST',
+    token: registration.data.token,
+    body: { recipientAlias: 'recipient.test', amount: '25.00' },
+  })
+  assert.equal(transfer.status, 201)
+
+  const activity = await request('/api/activity', { token: registration.data.token })
+  assert.equal(activity.status, 200)
+  assert.ok(activity.data.activity.some((item) => item.type === 'DEMO_FUNDING' && item.currency === 'PEN'))
+  assert.ok(activity.data.activity.some((item) => item.type === 'TRANSFER' && item.currency === 'PEN'))
+  assert.equal(activity.data.activity.some((item) => item.type === 'CONVERSION'), false)
+  assert.equal(activity.data.activity.some((item) => item.currency === 'USDT'), false)
+
+  const walletAfterHistory = await request('/api/wallet', { token: registration.data.token })
+  assert.deepEqual(walletAfterHistory.data.balances, { PEN: 600 })
+
+  const beforeDb = new DatabaseSync(dbPath, { readOnly: true })
+  const beforeTransactions = beforeDb.prepare('SELECT COUNT(*) AS count FROM ledger_transactions').get().count
+  const beforeBalances = beforeDb.prepare(`
+    SELECT currency, balance
+    FROM accounts
+    WHERE owner_type = 'USER' AND owner_id = ?
+    ORDER BY currency
+  `).all(registration.data.user.id)
+  beforeDb.close()
+
+  const blockedConversion = await request('/api/conversions', {
+    method: 'POST', token: registration.data.token, body: { fromCurrency: 'PEN', amount: '375.00' },
+  })
+  assert.equal(blockedConversion.status, 409)
+  assert.equal(blockedConversion.data.error.code, 'FEATURE_NOT_AVAILABLE')
+  assert.equal(blockedConversion.data.error.message, 'La conversión no está disponible en esta versión.')
+
+  const afterDb = new DatabaseSync(dbPath, { readOnly: true })
+  const afterTransactions = afterDb.prepare('SELECT COUNT(*) AS count FROM ledger_transactions').get().count
+  const afterBalances = afterDb.prepare(`
+    SELECT currency, balance
+    FROM accounts
+    WHERE owner_type = 'USER' AND owner_id = ?
+    ORDER BY currency
+  `).all(registration.data.user.id)
+  afterDb.close()
+  assert.equal(afterTransactions, beforeTransactions)
+  assert.deepEqual(afterBalances, beforeBalances)
 })
 
 test('autenticación rechaza credenciales incorrectas y duplicados', async (context) => {
@@ -180,9 +308,14 @@ test('parser monetario acepta límites exactos y rechaza formatos ambiguos', () 
       `El monto ${JSON.stringify(amount)} debe ser rechazado.`,
     )
   }
+
+  assert.throws(
+    () => multiplyDivideMinor(1, 100, 375),
+    (error) => error instanceof MoneyError && error.code === 'INVALID_AMOUNT',
+  )
 })
 
-test('fondeo demo y conversiones rechazan montos inválidos o demasiado pequeños', async (context) => {
+test('fondeo demo rechaza montos inválidos', async (context) => {
   const { app, request } = await startApi()
   context.after(() => app.close())
 
@@ -197,18 +330,6 @@ test('fondeo demo y conversiones rechazan montos inválidos o demasiado pequeño
   })
   assert.equal(invalidFunding.status, 400)
   assert.equal(invalidFunding.data.error.code, 'INVALID_AMOUNT')
-
-  const invalidConversion = await request('/api/conversions', {
-    method: 'POST', token: user.data.token, body: { fromCurrency: 'PEN', amount: '1.001' },
-  })
-  assert.equal(invalidConversion.status, 400)
-  assert.equal(invalidConversion.data.error.code, 'INVALID_AMOUNT')
-
-  const tooSmallConversion = await request('/api/conversions', {
-    method: 'POST', token: user.data.token, body: { fromCurrency: 'PEN', amount: '0.01' },
-  })
-  assert.equal(tooSmallConversion.status, 400)
-  assert.equal(tooSmallConversion.data.error.code, 'INVALID_AMOUNT')
 })
 
 function createLedgerFixture() {
