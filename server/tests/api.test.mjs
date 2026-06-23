@@ -53,7 +53,7 @@ test('flujo financiero V1: registro, KYC, fondeo, envío y actividad PEN', async
   assert.equal(bob.status, 201)
 
   const blockedTransfer = await request('/api/transfers', {
-    method: 'POST', token: alice.data.token, idempotencyKey: 'flow-blocked-001', body: { recipientAlias: 'bob.ion', amount: '10.00' },
+    method: 'POST', token: alice.data.token, body: { recipientAlias: 'bob.ion', amount: '10.00' },
   })
   assert.equal(blockedTransfer.status, 403)
   assert.equal(blockedTransfer.data.error.code, 'KYC_REQUIRED')
@@ -298,6 +298,50 @@ test('API protege endpoints y rechaza montos monetarios inválidos', async (cont
   }
 })
 
+test('Idempotency-Key respeta los límites de 8 a 128 caracteres', async (context) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ionpay-idempotency-key-limits-'))
+  const dbPath = join(directory, 'ionpay.db')
+  const { app, request } = await startApi({ dbPath })
+  context.after(async () => {
+    await app.close()
+    rmSync(directory, { recursive: true, force: true })
+  })
+
+  const user = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Key Limits', phone: '+51970000004', alias: 'key.limits', password: 'ClaveSegura123' },
+  })
+
+  const sevenCharacters = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: 'a'.repeat(7), body: { amount: '1.00' },
+  })
+  assert.equal(sevenCharacters.status, 400)
+  assert.equal(sevenCharacters.data.error.code, 'INVALID_IDEMPOTENCY_KEY')
+
+  const eightCharacters = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: 'A1._-:b2', body: { amount: '1.00' },
+  })
+  assert.equal(eightCharacters.status, 201)
+
+  const oneHundredTwentyEightCharacters = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: 'K'.repeat(128), body: { amount: '2.00' },
+  })
+  assert.equal(oneHundredTwentyEightCharacters.status, 201)
+
+  const oneHundredTwentyNineCharacters = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: 'z'.repeat(129), body: { amount: '1.00' },
+  })
+  assert.equal(oneHundredTwentyNineCharacters.status, 400)
+  assert.equal(oneHundredTwentyNineCharacters.data.error.code, 'INVALID_IDEMPOTENCY_KEY')
+
+  const wallet = await request('/api/wallet', { token: user.data.token })
+  assert.deepEqual(wallet.data.balances, { PEN: 3 })
+  const auditDb = new DatabaseSync(dbPath, { readOnly: true })
+  assert.equal(auditDb.prepare(`SELECT COUNT(*) AS count FROM idempotency_records WHERE owner_id = ?`).get(user.data.user.id).count, 2)
+  assert.equal(auditDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'DEMO_FUNDING'`).get().count, 2)
+  auditDb.close()
+})
+
 test('transferencias aplican idempotencia, conflictos, aislamiento y rollback seguro', async (context) => {
   const directory = mkdtempSync(join(tmpdir(), 'ionpay-transfer-idempotency-'))
   const dbPath = join(directory, 'ionpay.db')
@@ -341,6 +385,18 @@ test('transferencias aplican idempotencia, conflictos, aislamiento y rollback se
   })
   assert.equal(invalidKey.status, 400)
   assert.equal(invalidKey.data.error.code, 'INVALID_IDEMPOTENCY_KEY')
+
+  const missingRecipientKey = 'transfer-missing-recipient-001'
+  const missingRecipient = await request('/api/transfers', {
+    method: 'POST', token: alice.data.token, idempotencyKey: missingRecipientKey,
+    body: { recipientAlias: 'missing.recipient', amount: '1.00' },
+  })
+  assert.equal(missingRecipient.status, 404)
+  assert.equal(missingRecipient.data.error.code, 'RECIPIENT_NOT_FOUND')
+  const missingRecipientAudit = new DatabaseSync(dbPath, { readOnly: true })
+  assert.equal(missingRecipientAudit.prepare(`SELECT COUNT(*) AS count FROM idempotency_records WHERE owner_id = ? AND idempotency_key = ?`).get(alice.data.user.id, missingRecipientKey).count, 0)
+  assert.equal(missingRecipientAudit.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'TRANSFER'`).get().count, 0)
+  missingRecipientAudit.close()
 
   const funding = await request('/api/demo/fund', {
     method: 'POST', token: alice.data.token, idempotencyKey: 'transfer-setup-fund-001', body: { amount: '100.00' },
