@@ -30,18 +30,6 @@ export const demoTransactions: Transaction[] = [
     channel: 'Ion QR',
     createdAt: new Date(now - 1000 * 60 * 60 * 6).toISOString(),
   },
-  {
-    id: 'ION-91D0EE',
-    kind: 'conversion',
-    title: 'Conversión completada',
-    counterpart: 'PEN → USDT',
-    amount: 80,
-    currency: 'USDT',
-    direction: 'neutral',
-    status: 'Completado',
-    channel: 'Ion Convert',
-    createdAt: new Date(now - 1000 * 60 * 60 * 27).toISOString(),
-  },
 ]
 
 export const emptyState: IonState = {
@@ -57,7 +45,7 @@ export const demoState: IonState = {
     alias: 'alex.ion',
     kycStatus: 'Verificado',
   },
-  wallet: { pen: 2840.6, usdt: 120 },
+  wallet: { pen: 2840.6, usdt: 0 },
   transactions: demoTransactions,
 }
 
