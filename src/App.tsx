@@ -77,7 +77,7 @@ function Sidebar({ tab, setTab, mode }: { tab: Tab; setTab: (tab: Tab) => void; 
   const items: Array<[Tab, string, typeof HomeIcon]> = [
     ['home', 'Inicio', HomeIcon],
     ['activity', 'Actividad', ActivityIcon],
-    ['services', 'Servicios', GridIcon],
+    ['services', 'Cobros', GridIcon],
     ['profile', 'Perfil', UserIcon],
   ]
   return (
@@ -91,7 +91,7 @@ function Sidebar({ tab, setTab, mode }: { tab: Tab; setTab: (tab: Tab) => void; 
 }
 
 function MobileNav({ tab, setTab, onPay }: { tab: Tab; setTab: (tab: Tab) => void; onPay: () => void }) {
-  return <nav className="mobile-nav"><button className={tab === 'home' ? 'active' : ''} onClick={() => setTab('home')}><HomeIcon /><span>Inicio</span></button><button className={tab === 'activity' ? 'active' : ''} onClick={() => setTab('activity')}><ActivityIcon /><span>Actividad</span></button><button className="nav-pay" onClick={onPay}><span className="nav-pay-circle"><PayIcon /></span><span>Pagar</span></button><button className={tab === 'services' ? 'active' : ''} onClick={() => setTab('services')}><GridIcon /><span>Servicios</span></button><button className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}><UserIcon /><span>Perfil</span></button></nav>
+  return <nav className="mobile-nav"><button className={tab === 'home' ? 'active' : ''} onClick={() => setTab('home')}><HomeIcon /><span>Inicio</span></button><button className={tab === 'activity' ? 'active' : ''} onClick={() => setTab('activity')}><ActivityIcon /><span>Actividad</span></button><button className="nav-pay" onClick={onPay}><span className="nav-pay-circle"><PayIcon /></span><span>Pagar</span></button><button className={tab === 'services' ? 'active' : ''} onClick={() => setTab('services')}><GridIcon /><span>Cobros</span></button><button className={tab === 'profile' ? 'active' : ''} onClick={() => setTab('profile')}><UserIcon /><span>Perfil</span></button></nav>
 }
 
 function BalanceCard({ state, visible, setVisible }: { state: IonState; visible: boolean; setVisible: (value: boolean) => void }) {

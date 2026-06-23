@@ -30,7 +30,7 @@ export default function ServicesPage({ state, openAction }: ServicesPageProps) {
       {merchantActive && (
         <section className="section-card account-status">
           <div className="section-title compact"><div><span className="eyebrow">Comercio básico</span><h2>Solo revisión de cobros recibidos</h2></div><CheckIcon /></div>
-          <div className="merchant-stats"><div><span>Pagos recibidos</span><strong>S/ {totalReceived.toFixed(2)}</strong></div><div><span>Operaciones</span><strong>{received.length}</strong></div></div>
+          <div className="merchant-stats"><div><span>Cobros recibidos</span><strong>S/ {totalReceived.toFixed(2)}</strong></div><div><span>Operaciones</span><strong>{received.length}</strong></div></div>
           <button className="secondary-button" onClick={() => setMerchantActive(false)}>Desactivar modo comercio</button>
         </section>
       )}
