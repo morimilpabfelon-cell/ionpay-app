@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { createIonPayServer } from '../app.mjs'
 import { createDatabase } from '../db.mjs'
 import { createLedger, LedgerError } from '../ledger.mjs'
+import { MoneyError, parsePenMinor } from '../money.mjs'
 
 async function startApi() {
   const app = createIonPayServer({ dbPath: ':memory:', demoMode: true })
@@ -165,6 +166,49 @@ test('API protege endpoints y rechaza montos monetarios inválidos', async (cont
     assert.equal(result.status, 400, `El monto ${JSON.stringify(amount)} debe ser rechazado.`)
     assert.equal(result.data.error.code, 'INVALID_AMOUNT')
   }
+})
+
+test('parser monetario acepta límites exactos y rechaza formatos ambiguos', () => {
+  assert.equal(parsePenMinor('90071992547409.91'), Number.MAX_SAFE_INTEGER)
+  assert.equal(parsePenMinor(' 10.00 '), 1000)
+  assert.equal(parsePenMinor('000.01'), 1)
+
+  for (const amount of ['90071992547409.92', '.', '1.', '01.234']) {
+    assert.throws(
+      () => parsePenMinor(amount),
+      (error) => error instanceof MoneyError && error.code === 'INVALID_AMOUNT',
+      `El monto ${JSON.stringify(amount)} debe ser rechazado.`,
+    )
+  }
+})
+
+test('fondeo demo y conversiones rechazan montos inválidos o demasiado pequeños', async (context) => {
+  const { app, request } = await startApi()
+  context.after(() => app.close())
+
+  const user = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Money Test', phone: '+51966666666', alias: 'money.test', password: 'ClaveSegura123' },
+  })
+  await request('/api/demo/verify', { method: 'POST', token: user.data.token })
+
+  const invalidFunding = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, body: { amount: '1.001' },
+  })
+  assert.equal(invalidFunding.status, 400)
+  assert.equal(invalidFunding.data.error.code, 'INVALID_AMOUNT')
+
+  const invalidConversion = await request('/api/conversions', {
+    method: 'POST', token: user.data.token, body: { fromCurrency: 'PEN', amount: '1.001' },
+  })
+  assert.equal(invalidConversion.status, 400)
+  assert.equal(invalidConversion.data.error.code, 'INVALID_AMOUNT')
+
+  const tooSmallConversion = await request('/api/conversions', {
+    method: 'POST', token: user.data.token, body: { fromCurrency: 'PEN', amount: '0.01' },
+  })
+  assert.equal(tooSmallConversion.status, 400)
+  assert.equal(tooSmallConversion.data.error.code, 'INVALID_AMOUNT')
 })
 
 function createLedgerFixture() {
