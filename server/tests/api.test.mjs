@@ -10,8 +10,8 @@ import { createDatabase } from '../db.mjs'
 import { createLedger, LedgerError } from '../ledger.mjs'
 import { MoneyError, multiplyDivideMinor, parsePenMinor } from '../money.mjs'
 
-async function startApi({ dbPath = ':memory:' } = {}) {
-  const app = createIonPayServer({ dbPath, demoMode: true })
+async function startApi({ dbPath = ':memory:', now } = {}) {
+  const app = createIonPayServer({ dbPath, demoMode: true, now })
   const address = await app.listen(0)
   const baseUrl = `http://127.0.0.1:${address.port}`
 
@@ -820,6 +820,7 @@ test('pago de solicitud es atómico, autorizado e idempotente ante concurrencia'
   const transactionCount = auditDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'PAYMENT_REQUEST_PAYMENT'`).get().count
   const entries = auditDb.prepare('SELECT currency, amount FROM ledger_entries WHERE transaction_id = ?').all(stored.paid_transaction_id)
   const invalidPaid = auditDb.prepare(`SELECT COUNT(*) AS count FROM payment_requests WHERE status = 'PAID' AND paid_transaction_id IS NULL`).get().count
+  const invalidTemporalPaid = auditDb.prepare(`SELECT COUNT(*) AS count FROM payment_requests WHERE status = 'PAID' AND expires_at <= paid_at`).get().count
   const failedAttemptRecords = auditDb.prepare(`SELECT COUNT(*) AS count FROM idempotency_records WHERE idempotency_key IN ('payment-pay-unverified-001', 'payment-pay-requester-001', 'payment-pay-outsider-001', 'payment-pay-partial-001', 'payment-pay-second-001')`).get().count
   auditDb.close()
   assert.equal(stored.status, 'PAID')
@@ -829,6 +830,7 @@ test('pago de solicitud es atómico, autorizado e idempotente ante concurrencia'
   assert.equal(entries.reduce((sum, entry) => sum + entry.amount, 0), 0)
   assert.ok(entries.every((entry) => entry.currency === 'PEN'))
   assert.equal(invalidPaid, 0)
+  assert.equal(invalidTemporalPaid, 0)
   assert.equal(failedAttemptRecords, 0)
 })
 
@@ -1054,6 +1056,130 @@ test('fallos entre ledger, estado e idempotencia revierten completamente el pago
   assert.equal(finalDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'PAYMENT_REQUEST_PAYMENT'`).get().count, 2)
   assert.equal(finalDb.prepare(`SELECT COUNT(*) AS count FROM payment_requests WHERE status = 'PAID' AND paid_transaction_id IS NULL`).get().count, 0)
   finalDb.close()
+})
+
+test('pago que cruza expiración revierte ledger y persiste EXPIRED sin idempotencia', async (context) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ionpay-payment-request-expiry-pay-'))
+  const dbPath = join(directory, 'ionpay.db')
+  const beforeExpiry = new Date('2035-01-01T00:00:00.000Z')
+  const afterExpiry = new Date('2035-01-01T00:00:02.000Z')
+  let crossExpiry = false
+  let clockCalls = 0
+  const now = () => {
+    if (!crossExpiry) return new Date(beforeExpiry)
+    clockCalls += 1
+    return new Date(clockCalls === 1 ? beforeExpiry : afterExpiry)
+  }
+  const { app, request } = await startApi({ dbPath, now })
+  context.after(async () => {
+    await app.close()
+    rmSync(directory, { recursive: true, force: true })
+  })
+
+  const requester = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Requester Expiry Pay', phone: '+51975000001', alias: 'requester.expiry.pay', password: 'ClaveSegura123' },
+  })
+  const payer = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Payer Expiry Pay', phone: '+51975000002', alias: 'payer.expiry.pay', password: 'ClaveSegura123' },
+  })
+  await request('/api/demo/verify', { method: 'POST', token: payer.data.token })
+  await request('/api/demo/fund', {
+    method: 'POST', token: payer.data.token, idempotencyKey: 'payment-expiry-pay-fund-001', body: { amount: '100.00' },
+  })
+  const created = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: 'payment-expiry-pay-create-001',
+    body: { payerAlias: 'payer.expiry.pay', amount: '25.00', currency: 'PEN' },
+  })
+  const paymentRequestId = created.data.paymentRequest.id
+  const expiryDb = new DatabaseSync(dbPath)
+  expiryDb.prepare(`UPDATE payment_requests SET expires_at = '2035-01-01T00:00:01.000Z' WHERE id = ?`).run(paymentRequestId)
+  expiryDb.close()
+
+  crossExpiry = true
+  const paymentKey = 'payment-expiry-cross-pay-001'
+  const payment = await request(`/api/payment-requests/${paymentRequestId}/pay`, {
+    method: 'POST', token: payer.data.token, idempotencyKey: paymentKey, body: {},
+  })
+  assert.equal(payment.status, 409)
+  assert.equal(payment.data.error.code, 'PAYMENT_REQUEST_EXPIRED')
+
+  const payerWallet = await request('/api/wallet', { token: payer.data.token })
+  const requesterWallet = await request('/api/wallet', { token: requester.data.token })
+  assert.deepEqual(payerWallet.data.balances, { PEN: 100 })
+  assert.deepEqual(requesterWallet.data.balances, { PEN: 0 })
+
+  const auditDb = new DatabaseSync(dbPath, { readOnly: true })
+  const stored = auditDb.prepare('SELECT * FROM payment_requests WHERE id = ?').get(paymentRequestId)
+  const paymentTransactions = auditDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'PAYMENT_REQUEST_PAYMENT'`).get().count
+  const idempotencyRecords = auditDb.prepare(`SELECT COUNT(*) AS count FROM idempotency_records WHERE owner_id = ? AND idempotency_key = ?`).get(payer.data.user.id, paymentKey).count
+  const missingTransaction = auditDb.prepare(`SELECT COUNT(*) AS count FROM payment_requests WHERE status = 'PAID' AND paid_transaction_id IS NULL`).get().count
+  const invalidPaidTime = auditDb.prepare(`SELECT COUNT(*) AS count FROM payment_requests WHERE status = 'PAID' AND expires_at <= paid_at`).get().count
+  auditDb.close()
+  assert.equal(stored.status, 'EXPIRED')
+  assert.equal(stored.paid_transaction_id, null)
+  assert.equal(paymentTransactions, 0)
+  assert.equal(idempotencyRecords, 0)
+  assert.equal(missingTransaction, 0)
+  assert.equal(invalidPaidTime, 0)
+})
+
+test('cancelación que cruza expiración conserva EXPIRED y no mueve saldo', async (context) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ionpay-payment-request-expiry-cancel-'))
+  const dbPath = join(directory, 'ionpay.db')
+  const beforeExpiry = new Date('2036-01-01T00:00:00.000Z')
+  const afterExpiry = new Date('2036-01-01T00:00:02.000Z')
+  let crossExpiry = false
+  let clockCalls = 0
+  const now = () => {
+    if (!crossExpiry) return new Date(beforeExpiry)
+    clockCalls += 1
+    return new Date(clockCalls === 1 ? beforeExpiry : afterExpiry)
+  }
+  const { app, request } = await startApi({ dbPath, now })
+  context.after(async () => {
+    await app.close()
+    rmSync(directory, { recursive: true, force: true })
+  })
+
+  const requester = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Requester Expiry Cancel', phone: '+51976000001', alias: 'requester.expiry.cancel', password: 'ClaveSegura123' },
+  })
+  const payer = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Payer Expiry Cancel', phone: '+51976000002', alias: 'payer.expiry.cancel', password: 'ClaveSegura123' },
+  })
+  const created = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: 'payment-expiry-cancel-create-001',
+    body: { payerAlias: 'payer.expiry.cancel', amount: '25.00', currency: 'PEN' },
+  })
+  const paymentRequestId = created.data.paymentRequest.id
+  const expiryDb = new DatabaseSync(dbPath)
+  expiryDb.prepare(`UPDATE payment_requests SET expires_at = '2036-01-01T00:00:01.000Z' WHERE id = ?`).run(paymentRequestId)
+  expiryDb.close()
+
+  crossExpiry = true
+  const cancellation = await request(`/api/payment-requests/${paymentRequestId}/cancel`, {
+    method: 'POST', token: requester.data.token,
+  })
+  assert.equal(cancellation.status, 409)
+  assert.equal(cancellation.data.error.code, 'PAYMENT_REQUEST_EXPIRED')
+
+  const requesterWallet = await request('/api/wallet', { token: requester.data.token })
+  const payerWallet = await request('/api/wallet', { token: payer.data.token })
+  assert.deepEqual(requesterWallet.data.balances, { PEN: 0 })
+  assert.deepEqual(payerWallet.data.balances, { PEN: 0 })
+
+  const auditDb = new DatabaseSync(dbPath, { readOnly: true })
+  const stored = auditDb.prepare('SELECT * FROM payment_requests WHERE id = ?').get(paymentRequestId)
+  const paymentTransactions = auditDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'PAYMENT_REQUEST_PAYMENT'`).get().count
+  auditDb.close()
+  assert.equal(stored.status, 'EXPIRED')
+  assert.equal(stored.cancelled_at, null)
+  assert.notEqual(stored.expired_at, null)
+  assert.equal(paymentTransactions, 0)
 })
 
 test('parser monetario acepta límites exactos y rechaza formatos ambiguos', () => {

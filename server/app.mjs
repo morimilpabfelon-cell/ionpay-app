@@ -76,7 +76,7 @@ function requestFingerprint(endpoint, payload) {
   return createHash('sha256').update(stableJson({ endpoint, payload })).digest('hex')
 }
 
-export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true } = {}) {
+export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true, now = () => new Date() } = {}) {
   const db = createDatabase(dbPath)
   const ledger = createLedger(db)
   const findUserByPhone = db.prepare('SELECT * FROM users WHERE phone = ?')
@@ -128,12 +128,12 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
   const markPaymentRequestPaid = db.prepare(`
     UPDATE payment_requests
     SET status = 'PAID', updated_at = ?, paid_at = ?, paid_transaction_id = ?
-    WHERE id = ? AND status = 'PENDING'
+    WHERE id = ? AND status = 'PENDING' AND expires_at > ?
   `)
   const cancelPaymentRequest = db.prepare(`
     UPDATE payment_requests
     SET status = 'CANCELLED', updated_at = ?, cancelled_at = ?
-    WHERE id = ? AND status = 'PENDING'
+    WHERE id = ? AND status = 'PENDING' AND expires_at > ?
   `)
 
   function createSession(userId) {
@@ -194,13 +194,12 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
   }
 
   function expireDuePaymentRequests() {
-    const now = new Date().toISOString()
-    expirePendingPaymentRequests.run(now, now, now)
+    const currentTime = now().toISOString()
+    expirePendingPaymentRequests.run(currentTime, currentTime, currentTime)
   }
 
-  function expireDuePaymentRequest(id) {
-    const now = new Date().toISOString()
-    expirePaymentRequestById.run(now, now, id, now)
+  function expirePaymentRequestWithinTransaction(id, currentTime) {
+    return expirePaymentRequestById.run(currentTime, currentTime, id, currentTime)
   }
 
   function assertPaymentRequestPending(paymentRequest) {
@@ -227,7 +226,11 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
       }
 
       const result = operation()
-      const now = new Date().toISOString()
+      if (result.commitError) {
+        db.exec('COMMIT')
+        throw result.commitError
+      }
+      const recordedAt = new Date().toISOString()
       insertIdempotencyRecord.run(
         randomUUID(),
         ownerId,
@@ -237,8 +240,8 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
         result.status,
         JSON.stringify(result.data),
         result.transactionId ?? null,
-        now,
-        now,
+        recordedAt,
+        recordedAt,
       )
       db.exec('COMMIT')
       return { status: result.status, data: result.data }
@@ -345,7 +348,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
             if (!payer) throw new ApiError(404, 'PAYER_NOT_FOUND', 'No encontramos al pagador.')
             if (payer.id === user.id) throw new ApiError(400, 'SAME_ACCOUNT', 'No puedes solicitarte un pago a ti mismo.')
             const id = randomUUID()
-            const createdAt = new Date().toISOString()
+            const createdAt = now().toISOString()
             const expiresAt = new Date(Date.parse(createdAt) + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
             insertPaymentRequest.run(
               id,
@@ -385,7 +388,6 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
         const idempotencyKey = requireIdempotencyKey(request)
         const body = await readBody(request)
         const paymentRequestId = paymentRequestPayMatch[1]
-        expireDuePaymentRequest(paymentRequestId)
 
         const result = executeIdempotent({
           ownerId: user.id,
@@ -398,6 +400,12 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
             }
             const paymentRequest = findPaymentRequestById.get(paymentRequestId)
             if (!paymentRequest) throw new ApiError(404, 'PAYMENT_REQUEST_NOT_FOUND', 'Solicitud de pago no encontrada.')
+            const checkedAt = now().toISOString()
+            if (paymentRequest.status === 'PENDING' && paymentRequest.expires_at <= checkedAt) {
+              const expired = expirePaymentRequestWithinTransaction(paymentRequestId, checkedAt)
+              if (expired.changes !== 1) throw new ApiError(409, 'PAYMENT_REQUEST_NOT_PENDING', 'La solicitud de pago ya no está pendiente.')
+              return { commitError: new ApiError(409, 'PAYMENT_REQUEST_EXPIRED', 'La solicitud de pago expiró.') }
+            }
             if (paymentRequest.payer_user_id !== user.id) {
               throw new ApiError(403, 'PAYMENT_REQUEST_FORBIDDEN', 'Solo el pagador asignado puede pagar esta solicitud.')
             }
@@ -407,6 +415,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
             const payerAccount = findAccount.get('USER', user.id, 'PEN', 'AVAILABLE')
             const requesterAccount = findAccount.get('USER', paymentRequest.requester_user_id, 'PEN', 'AVAILABLE')
             const metadata = JSON.parse(paymentRequest.metadata_json)
+            db.exec('SAVEPOINT payment_request_payment')
             const transaction = ledger.postWithinTransaction({
               type: 'PAYMENT_REQUEST_PAYMENT',
               reference: reference(),
@@ -421,9 +430,18 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
                 note: typeof metadata.note === 'string' ? metadata.note : '',
               },
             })
-            const paidAt = new Date().toISOString()
-            const update = markPaymentRequestPaid.run(paidAt, paidAt, transaction.id, paymentRequestId)
-            if (update.changes !== 1) throw new ApiError(409, 'PAYMENT_REQUEST_NOT_PENDING', 'La solicitud de pago ya no está pendiente.')
+            const paidAt = now().toISOString()
+            const update = markPaymentRequestPaid.run(paidAt, paidAt, transaction.id, paymentRequestId, paidAt)
+            if (update.changes !== 1) {
+              db.exec('ROLLBACK TO payment_request_payment')
+              db.exec('RELEASE payment_request_payment')
+              const expired = expirePaymentRequestWithinTransaction(paymentRequestId, paidAt)
+              if (expired.changes === 1) {
+                return { commitError: new ApiError(409, 'PAYMENT_REQUEST_EXPIRED', 'La solicitud de pago expiró.') }
+              }
+              throw new ApiError(409, 'PAYMENT_REQUEST_NOT_PENDING', 'La solicitud de pago ya no está pendiente.')
+            }
+            db.exec('RELEASE payment_request_payment')
             return {
               status: 200,
               data: {
@@ -441,7 +459,6 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
       if (request.method === 'POST' && paymentRequestCancelMatch) {
         const user = authenticate(request)
         const paymentRequestId = paymentRequestCancelMatch[1]
-        expireDuePaymentRequest(paymentRequestId)
         db.exec('BEGIN IMMEDIATE')
         try {
           const paymentRequest = findPaymentRequestById.get(paymentRequestId)
@@ -449,10 +466,24 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
           if (paymentRequest.requester_user_id !== user.id) {
             throw new ApiError(403, 'PAYMENT_REQUEST_FORBIDDEN', 'Solo quien creó la solicitud puede cancelarla.')
           }
+          const checkedAt = now().toISOString()
+          if (paymentRequest.status === 'PENDING' && paymentRequest.expires_at <= checkedAt) {
+            const expired = expirePaymentRequestWithinTransaction(paymentRequestId, checkedAt)
+            if (expired.changes !== 1) throw new ApiError(409, 'PAYMENT_REQUEST_NOT_PENDING', 'La solicitud de pago ya no está pendiente.')
+            db.exec('COMMIT')
+            return send(response, 409, { error: { code: 'PAYMENT_REQUEST_EXPIRED', message: 'La solicitud de pago expiró.' } })
+          }
           assertPaymentRequestPending(paymentRequest)
-          const cancelledAt = new Date().toISOString()
-          const update = cancelPaymentRequest.run(cancelledAt, cancelledAt, paymentRequestId)
-          if (update.changes !== 1) throw new ApiError(409, 'PAYMENT_REQUEST_NOT_PENDING', 'La solicitud de pago ya no está pendiente.')
+          const cancelledAt = now().toISOString()
+          const update = cancelPaymentRequest.run(cancelledAt, cancelledAt, paymentRequestId, cancelledAt)
+          if (update.changes !== 1) {
+            const expired = expirePaymentRequestWithinTransaction(paymentRequestId, cancelledAt)
+            if (expired.changes === 1) {
+              db.exec('COMMIT')
+              return send(response, 409, { error: { code: 'PAYMENT_REQUEST_EXPIRED', message: 'La solicitud de pago expiró.' } })
+            }
+            throw new ApiError(409, 'PAYMENT_REQUEST_NOT_PENDING', 'La solicitud de pago ya no está pendiente.')
+          }
           const cancelled = publicPaymentRequest(findPaymentRequestById.get(paymentRequestId))
           db.exec('COMMIT')
           return send(response, 200, { paymentRequest: cancelled })
