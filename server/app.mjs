@@ -2,6 +2,7 @@ import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { createDatabase } from './db.mjs'
 import { createLedger, LedgerError } from './ledger.mjs'
+import { MoneyError, multiplyDivideMinor, parseDecimalMinor, parsePenMinor } from './money.mjs'
 import { hashPassword, hashToken, newSessionToken, verifyPassword } from './security.mjs'
 
 class ApiError extends Error {
@@ -37,14 +38,6 @@ async function readBody(request) {
 function requiredText(value, name, minimum = 1) {
   if (typeof value !== 'string' || value.trim().length < minimum) throw new ApiError(400, 'VALIDATION_ERROR', `${name} no es válido.`)
   return value.trim()
-}
-
-function toMinor(value) {
-  const amount = Number(value)
-  if (!Number.isFinite(amount) || amount <= 0) throw new ApiError(400, 'INVALID_AMOUNT', 'El monto debe ser mayor que cero.')
-  const minor = Math.round(amount * 100)
-  if (!Number.isSafeInteger(minor)) throw new ApiError(400, 'INVALID_AMOUNT', 'El monto es demasiado grande.')
-  return minor
 }
 
 function publicUser(user) {
@@ -170,7 +163,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
         const recipient = findUserByAlias.get(recipientAlias)
         if (!recipient) throw new ApiError(404, 'RECIPIENT_NOT_FOUND', 'No encontramos al destinatario.')
         if (recipient.id === user.id) throw new ApiError(400, 'SAME_ACCOUNT', 'No puedes enviarte dinero a ti mismo.')
-        const amount = toMinor(body.amount)
+        const amount = parsePenMinor(body.amount)
         const senderAccount = findAccount.get('USER', user.id, 'PEN', 'AVAILABLE')
         const recipientAccount = findAccount.get('USER', recipient.id, 'PEN', 'AVAILABLE')
         const transaction = ledger.post({ type: 'TRANSFER', reference: reference(), entries: [{ accountId: senderAccount.id, currency: 'PEN', amount: -amount }, { accountId: recipientAccount.id, currency: 'PEN', amount }], metadata: { senderAlias: user.alias, recipientAlias: recipient.alias, note: typeof body.note === 'string' ? body.note.slice(0, 120) : '' } })
@@ -183,10 +176,12 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
         const body = await readBody(request)
         const from = body.fromCurrency
         if (!['PEN', 'USDT'].includes(from)) throw new ApiError(400, 'INVALID_CURRENCY', 'La moneda de origen no es válida.')
-        const rate = 3.75
-        const sourceAmount = toMinor(body.amount)
+        const rate = '3.75'
+        const sourceAmount = parseDecimalMinor(body.amount, from)
         const to = from === 'PEN' ? 'USDT' : 'PEN'
-        const targetAmount = from === 'PEN' ? Math.round(sourceAmount / rate) : Math.round(sourceAmount * rate)
+        const targetAmount = from === 'PEN'
+          ? multiplyDivideMinor(sourceAmount, 100, 375)
+          : multiplyDivideMinor(sourceAmount, 375, 100)
         const sourceAccount = findAccount.get('USER', user.id, from, 'AVAILABLE')
         const targetAccount = findAccount.get('USER', user.id, to, 'AVAILABLE')
         const sourceTreasury = findAccount.get('SYSTEM', 'IONPAY', from, 'TREASURY')
@@ -204,7 +199,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
       if (demoMode && request.method === 'POST' && url.pathname === '/api/demo/fund') {
         const user = authenticate(request)
         const body = await readBody(request)
-        const amount = toMinor(body.amount)
+        const amount = parsePenMinor(body.amount)
         const treasury = findAccount.get('SYSTEM', 'IONPAY', 'PEN', 'TREASURY')
         const userAccount = findAccount.get('USER', user.id, 'PEN', 'AVAILABLE')
         const transaction = ledger.post({ type: 'DEMO_FUNDING', reference: reference(), entries: [{ accountId: treasury.id, currency: 'PEN', amount: -amount }, { accountId: userAccount.id, currency: 'PEN', amount }], metadata: { demo: true } })
@@ -214,6 +209,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
       throw new ApiError(404, 'NOT_FOUND', 'Ruta no encontrada.')
     } catch (error) {
       if (error instanceof ApiError) return send(response, error.status, { error: { code: error.code, message: error.message } })
+      if (error instanceof MoneyError) return send(response, 400, { error: { code: error.code, message: error.message } })
       if (error instanceof LedgerError) {
         const status = error.code === 'INSUFFICIENT_FUNDS' ? 409 : 400
         return send(response, status, { error: { code: error.code, message: error.message } })
