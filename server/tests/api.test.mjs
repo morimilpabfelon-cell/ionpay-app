@@ -97,11 +97,28 @@ test('superficie V1 conserva cuentas USDT internas y bloquea conversiones sin cr
     rmSync(directory, { recursive: true, force: true })
   })
 
+  const withoutToken = await request('/api/conversions', {
+    method: 'POST', body: { fromCurrency: 'PEN', amount: '1.00' },
+  })
+  assert.equal(withoutToken.status, 401)
+  assert.equal(withoutToken.data.error.code, 'UNAUTHORIZED')
+
+  const invalidToken = await request('/api/conversions', {
+    method: 'POST', token: 'token-invalido', body: { fromCurrency: 'PEN', amount: '1.00' },
+  })
+  assert.equal(invalidToken.status, 401)
+  assert.equal(invalidToken.data.error.code, 'INVALID_SESSION')
+
   const registration = await request('/api/auth/register', {
     method: 'POST',
     body: { name: 'Surface Test', phone: '+51977777777', alias: 'surface.test', password: 'ClaveSegura123' },
   })
   assert.equal(registration.status, 201)
+  const recipient = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Recipient Test', phone: '+51988888888', alias: 'recipient.test', password: 'ClaveSegura123' },
+  })
+  assert.equal(recipient.status, 201)
 
   const internalDb = new DatabaseSync(dbPath, { readOnly: true })
   const internalAccounts = internalDb.prepare(`
@@ -118,7 +135,59 @@ test('superficie V1 conserva cuentas USDT internas y bloquea conversiones sin cr
   assert.deepEqual(wallet.data.balances, { PEN: 0 })
   assert.equal(Object.hasOwn(wallet.data.balances, 'USDT'), false)
 
+  const unverifiedConversion = await request('/api/conversions', {
+    method: 'POST', token: registration.data.token, body: { fromCurrency: 'PEN', amount: '1.00' },
+  })
+  assert.equal(unverifiedConversion.status, 409)
+  assert.equal(unverifiedConversion.data.error.code, 'FEATURE_NOT_AVAILABLE')
+
   await request('/api/demo/verify', { method: 'POST', token: registration.data.token })
+  await request('/api/demo/verify', { method: 'POST', token: recipient.data.token })
+
+  const funding = await request('/api/demo/fund', {
+    method: 'POST', token: registration.data.token, body: { amount: '1000.00' },
+  })
+  assert.equal(funding.status, 201)
+
+  const historicalDb = new DatabaseSync(dbPath)
+  const historicalLedger = createLedger(historicalDb)
+  const accountByCurrency = historicalDb.prepare(`
+    SELECT id FROM accounts
+    WHERE owner_type = ? AND owner_id = ? AND currency = ? AND kind = ?
+  `)
+  const userPen = accountByCurrency.get('USER', registration.data.user.id, 'PEN', 'AVAILABLE')
+  const userUsdt = accountByCurrency.get('USER', registration.data.user.id, 'USDT', 'AVAILABLE')
+  const treasuryPen = accountByCurrency.get('SYSTEM', 'IONPAY', 'PEN', 'TREASURY')
+  const treasuryUsdt = accountByCurrency.get('SYSTEM', 'IONPAY', 'USDT', 'TREASURY')
+  historicalLedger.post({
+    type: 'CONVERSION',
+    reference: `HISTORICAL-${randomUUID()}`,
+    entries: [
+      { accountId: userPen.id, currency: 'PEN', amount: -37_500 },
+      { accountId: treasuryPen.id, currency: 'PEN', amount: 37_500 },
+      { accountId: treasuryUsdt.id, currency: 'USDT', amount: -10_000 },
+      { accountId: userUsdt.id, currency: 'USDT', amount: 10_000 },
+    ],
+    metadata: { historical: true },
+  })
+  historicalDb.close()
+
+  const transfer = await request('/api/transfers', {
+    method: 'POST',
+    token: registration.data.token,
+    body: { recipientAlias: 'recipient.test', amount: '25.00' },
+  })
+  assert.equal(transfer.status, 201)
+
+  const activity = await request('/api/activity', { token: registration.data.token })
+  assert.equal(activity.status, 200)
+  assert.ok(activity.data.activity.some((item) => item.type === 'DEMO_FUNDING' && item.currency === 'PEN'))
+  assert.ok(activity.data.activity.some((item) => item.type === 'TRANSFER' && item.currency === 'PEN'))
+  assert.equal(activity.data.activity.some((item) => item.type === 'CONVERSION'), false)
+  assert.equal(activity.data.activity.some((item) => item.currency === 'USDT'), false)
+
+  const walletAfterHistory = await request('/api/wallet', { token: registration.data.token })
+  assert.deepEqual(walletAfterHistory.data.balances, { PEN: 600 })
 
   const beforeDb = new DatabaseSync(dbPath, { readOnly: true })
   const beforeTransactions = beforeDb.prepare('SELECT COUNT(*) AS count FROM ledger_transactions').get().count

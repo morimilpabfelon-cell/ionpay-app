@@ -150,6 +150,8 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true 
           JOIN ledger_entries e ON e.transaction_id = t.id
           JOIN accounts a ON a.id = e.account_id
           WHERE a.owner_type = 'USER' AND a.owner_id = ?
+            AND t.type != 'CONVERSION'
+            AND e.currency = 'PEN'
           ORDER BY t.created_at DESC
           LIMIT ?
         `).all(user.id, limit)
