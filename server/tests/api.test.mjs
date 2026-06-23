@@ -15,12 +15,13 @@ async function startApi({ dbPath = ':memory:' } = {}) {
   const address = await app.listen(0)
   const baseUrl = `http://127.0.0.1:${address.port}`
 
-  async function request(path, { method = 'GET', token, body } = {}) {
+  async function request(path, { method = 'GET', token, body, idempotencyKey } = {}) {
     const response = await fetch(`${baseUrl}${path}`, {
       method,
       headers: {
         ...(body ? { 'Content-Type': 'application/json' } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
     })
@@ -62,12 +63,12 @@ test('flujo financiero V1: registro, KYC, fondeo, envío y actividad PEN', async
   assert.equal(verifyAlice.data.user.kycStatus, 'VERIFIED')
   assert.equal(verifyBob.data.user.kycStatus, 'VERIFIED')
 
-  const funding = await request('/api/demo/fund', { method: 'POST', token: alice.data.token, body: { amount: '1000.00' } })
+  const funding = await request('/api/demo/fund', { method: 'POST', token: alice.data.token, idempotencyKey: 'flow-funding-001', body: { amount: '1000.00' } })
   assert.equal(funding.status, 201)
   assert.deepEqual(funding.data.balances, { PEN: 1000 })
 
   const transfer = await request('/api/transfers', {
-    method: 'POST', token: alice.data.token, body: { recipientAlias: '@bob.ion', amount: '125.50', note: 'Prueba' },
+    method: 'POST', token: alice.data.token, idempotencyKey: 'flow-transfer-001', body: { recipientAlias: '@bob.ion', amount: '125.50', note: 'Prueba' },
   })
   assert.equal(transfer.status, 201)
   assert.equal(transfer.data.transaction.status, 'COMPLETED')
@@ -78,7 +79,7 @@ test('flujo financiero V1: registro, KYC, fondeo, envío y actividad PEN', async
   assert.equal(Object.hasOwn(bobWallet.data.balances, 'USDT'), false)
 
   const insufficient = await request('/api/transfers', {
-    method: 'POST', token: alice.data.token, body: { recipientAlias: 'bob.ion', amount: '5000.00' },
+    method: 'POST', token: alice.data.token, idempotencyKey: 'flow-insufficient-001', body: { recipientAlias: 'bob.ion', amount: '5000.00' },
   })
   assert.equal(insufficient.status, 409)
   assert.equal(insufficient.data.error.code, 'INSUFFICIENT_FUNDS')
@@ -145,7 +146,7 @@ test('superficie V1 conserva cuentas USDT internas y bloquea conversiones sin cr
   await request('/api/demo/verify', { method: 'POST', token: recipient.data.token })
 
   const funding = await request('/api/demo/fund', {
-    method: 'POST', token: registration.data.token, body: { amount: '1000.00' },
+    method: 'POST', token: registration.data.token, idempotencyKey: 'surface-funding-001', body: { amount: '1000.00' },
   })
   assert.equal(funding.status, 201)
 
@@ -175,6 +176,7 @@ test('superficie V1 conserva cuentas USDT internas y bloquea conversiones sin cr
   const transfer = await request('/api/transfers', {
     method: 'POST',
     token: registration.data.token,
+    idempotencyKey: 'surface-transfer-001',
     body: { recipientAlias: 'recipient.test', amount: '25.00' },
   })
   assert.equal(transfer.status, 201)
@@ -271,7 +273,7 @@ test('API protege endpoints y rechaza montos monetarios inválidos', async (cont
   await request('/api/demo/verify', { method: 'POST', token: bob.data.token })
 
   const selfPayment = await request('/api/transfers', {
-    method: 'POST', token: alice.data.token, body: { recipientAlias: 'alice.test', amount: '1.00' },
+    method: 'POST', token: alice.data.token, idempotencyKey: 'money-self-001', body: { recipientAlias: 'alice.test', amount: '1.00' },
   })
   assert.equal(selfPayment.status, 400)
   assert.equal(selfPayment.data.error.code, 'SAME_ACCOUNT')
@@ -287,13 +289,301 @@ test('API protege endpoints y rechaza montos monetarios inválidos', async (cont
     '90071992547409.92',
     1,
   ]
-  for (const amount of invalidAmounts) {
+  for (const [index, amount] of invalidAmounts.entries()) {
     const result = await request('/api/transfers', {
-      method: 'POST', token: alice.data.token, body: { recipientAlias: 'bob.test', amount },
+      method: 'POST', token: alice.data.token, idempotencyKey: `money-invalid-${index}`, body: { recipientAlias: 'bob.test', amount },
     })
     assert.equal(result.status, 400, `El monto ${JSON.stringify(amount)} debe ser rechazado.`)
     assert.equal(result.data.error.code, 'INVALID_AMOUNT')
   }
+})
+
+test('Idempotency-Key respeta los límites de 8 a 128 caracteres', async (context) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ionpay-idempotency-key-limits-'))
+  const dbPath = join(directory, 'ionpay.db')
+  const { app, request } = await startApi({ dbPath })
+  context.after(async () => {
+    await app.close()
+    rmSync(directory, { recursive: true, force: true })
+  })
+
+  const user = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Key Limits', phone: '+51970000004', alias: 'key.limits', password: 'ClaveSegura123' },
+  })
+
+  const sevenCharacters = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: 'a'.repeat(7), body: { amount: '1.00' },
+  })
+  assert.equal(sevenCharacters.status, 400)
+  assert.equal(sevenCharacters.data.error.code, 'INVALID_IDEMPOTENCY_KEY')
+
+  const eightCharacters = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: 'A1._-:b2', body: { amount: '1.00' },
+  })
+  assert.equal(eightCharacters.status, 201)
+
+  const oneHundredTwentyEightCharacters = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: 'K'.repeat(128), body: { amount: '2.00' },
+  })
+  assert.equal(oneHundredTwentyEightCharacters.status, 201)
+
+  const oneHundredTwentyNineCharacters = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: 'z'.repeat(129), body: { amount: '1.00' },
+  })
+  assert.equal(oneHundredTwentyNineCharacters.status, 400)
+  assert.equal(oneHundredTwentyNineCharacters.data.error.code, 'INVALID_IDEMPOTENCY_KEY')
+
+  const wallet = await request('/api/wallet', { token: user.data.token })
+  assert.deepEqual(wallet.data.balances, { PEN: 3 })
+  const auditDb = new DatabaseSync(dbPath, { readOnly: true })
+  assert.equal(auditDb.prepare(`SELECT COUNT(*) AS count FROM idempotency_records WHERE owner_id = ?`).get(user.data.user.id).count, 2)
+  assert.equal(auditDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'DEMO_FUNDING'`).get().count, 2)
+  auditDb.close()
+})
+
+test('transferencias aplican idempotencia, conflictos, aislamiento y rollback seguro', async (context) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ionpay-transfer-idempotency-'))
+  const dbPath = join(directory, 'ionpay.db')
+  const { app, request } = await startApi({ dbPath })
+  context.after(async () => {
+    await app.close()
+    rmSync(directory, { recursive: true, force: true })
+  })
+
+  const unauthenticated = await request('/api/transfers', {
+    method: 'POST', body: { recipientAlias: 'nobody', amount: '1.00' },
+  })
+  assert.equal(unauthenticated.status, 401)
+  assert.equal(unauthenticated.data.error.code, 'UNAUTHORIZED')
+
+  const invalidSession = await request('/api/transfers', {
+    method: 'POST', token: 'token-invalido', body: { recipientAlias: 'nobody', amount: '1.00' },
+  })
+  assert.equal(invalidSession.status, 401)
+  assert.equal(invalidSession.data.error.code, 'INVALID_SESSION')
+
+  const alice = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Alice Idempotency', phone: '+51970000001', alias: 'alice.idem', password: 'ClaveSegura123' },
+  })
+  const bob = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Bob Idempotency', phone: '+51970000002', alias: 'bob.idem', password: 'ClaveSegura123' },
+  })
+  await request('/api/demo/verify', { method: 'POST', token: alice.data.token })
+  await request('/api/demo/verify', { method: 'POST', token: bob.data.token })
+
+  const missingKey = await request('/api/transfers', {
+    method: 'POST', token: alice.data.token, body: { recipientAlias: 'bob.idem', amount: '1.00' },
+  })
+  assert.equal(missingKey.status, 400)
+  assert.equal(missingKey.data.error.code, 'IDEMPOTENCY_KEY_REQUIRED')
+
+  const invalidKey = await request('/api/transfers', {
+    method: 'POST', token: alice.data.token, idempotencyKey: 'bad key!', body: { recipientAlias: 'bob.idem', amount: '1.00' },
+  })
+  assert.equal(invalidKey.status, 400)
+  assert.equal(invalidKey.data.error.code, 'INVALID_IDEMPOTENCY_KEY')
+
+  const missingRecipientKey = 'transfer-missing-recipient-001'
+  const missingRecipient = await request('/api/transfers', {
+    method: 'POST', token: alice.data.token, idempotencyKey: missingRecipientKey,
+    body: { recipientAlias: 'missing.recipient', amount: '1.00' },
+  })
+  assert.equal(missingRecipient.status, 404)
+  assert.equal(missingRecipient.data.error.code, 'RECIPIENT_NOT_FOUND')
+  const missingRecipientAudit = new DatabaseSync(dbPath, { readOnly: true })
+  assert.equal(missingRecipientAudit.prepare(`SELECT COUNT(*) AS count FROM idempotency_records WHERE owner_id = ? AND idempotency_key = ?`).get(alice.data.user.id, missingRecipientKey).count, 0)
+  assert.equal(missingRecipientAudit.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'TRANSFER'`).get().count, 0)
+  missingRecipientAudit.close()
+
+  const funding = await request('/api/demo/fund', {
+    method: 'POST', token: alice.data.token, idempotencyKey: 'transfer-setup-fund-001', body: { amount: '100.00' },
+  })
+  assert.equal(funding.status, 201)
+
+  const transferKey = 'transfer-idem-001'
+  const [firstTransfer, retryTransfer] = await Promise.all([
+    request('/api/transfers', {
+      method: 'POST', token: alice.data.token, idempotencyKey: transferKey,
+      body: { recipientAlias: 'bob.idem', amount: '25.00', note: 'Reintento seguro' },
+    }),
+    request('/api/transfers', {
+      method: 'POST', token: alice.data.token, idempotencyKey: transferKey,
+      body: { note: 'Reintento seguro', amount: '25.0', recipientAlias: '@bob.idem' },
+    }),
+  ])
+  assert.equal(firstTransfer.status, 201)
+  assert.equal(retryTransfer.status, 201)
+  assert.deepEqual(retryTransfer.data, firstTransfer.data)
+  assert.equal(retryTransfer.data.transaction.id, firstTransfer.data.transaction.id)
+  assert.equal(retryTransfer.data.transaction.reference, firstTransfer.data.transaction.reference)
+
+  const aliceWallet = await request('/api/wallet', { token: alice.data.token })
+  const bobWallet = await request('/api/wallet', { token: bob.data.token })
+  assert.deepEqual(aliceWallet.data.balances, { PEN: 75 })
+  assert.deepEqual(bobWallet.data.balances, { PEN: 25 })
+
+  const reusedPayload = await request('/api/transfers', {
+    method: 'POST', token: alice.data.token, idempotencyKey: transferKey,
+    body: { recipientAlias: 'bob.idem', amount: '30.00', note: 'Reintento seguro' },
+  })
+  assert.equal(reusedPayload.status, 409)
+  assert.equal(reusedPayload.data.error.code, 'IDEMPOTENCY_KEY_REUSED')
+
+  const reusedEndpoint = await request('/api/demo/fund', {
+    method: 'POST', token: alice.data.token, idempotencyKey: transferKey, body: { amount: '10.00' },
+  })
+  assert.equal(reusedEndpoint.status, 409)
+  assert.equal(reusedEndpoint.data.error.code, 'IDEMPOTENCY_KEY_REUSED')
+
+  const beforeInsufficient = await request('/api/wallet', { token: alice.data.token })
+  assert.deepEqual(beforeInsufficient.data.balances, aliceWallet.data.balances)
+  const insufficientKey = 'transfer-insufficient-001'
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const insufficient = await request('/api/transfers', {
+      method: 'POST', token: alice.data.token, idempotencyKey: insufficientKey,
+      body: { recipientAlias: 'bob.idem', amount: '1000.00' },
+    })
+    assert.equal(insufficient.status, 409)
+    assert.equal(insufficient.data.error.code, 'INSUFFICIENT_FUNDS')
+  }
+  const afterInsufficient = await request('/api/wallet', { token: alice.data.token })
+  assert.deepEqual(afterInsufficient.data.balances, beforeInsufficient.data.balances)
+
+  const auditDb = new DatabaseSync(dbPath, { readOnly: true })
+  const transferCount = auditDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'TRANSFER'`).get().count
+  const transferRecord = auditDb.prepare(`SELECT * FROM idempotency_records WHERE owner_id = ? AND idempotency_key = ?`).get(alice.data.user.id, transferKey)
+  const insufficientRecords = auditDb.prepare(`SELECT COUNT(*) AS count FROM idempotency_records WHERE owner_id = ? AND idempotency_key = ?`).get(alice.data.user.id, insufficientKey).count
+  auditDb.close()
+  assert.equal(transferCount, 1)
+  assert.equal(transferRecord.transaction_id, firstTransfer.data.transaction.id)
+  assert.equal(insufficientRecords, 0)
+
+  const isolatedOwner = await request('/api/demo/fund', {
+    method: 'POST', token: bob.data.token, idempotencyKey: transferKey, body: { amount: '5.00' },
+  })
+  assert.equal(isolatedOwner.status, 201)
+  const bobAfterIsolatedReuse = await request('/api/wallet', { token: bob.data.token })
+  assert.deepEqual(bobAfterIsolatedReuse.data.balances, { PEN: 30 })
+})
+
+test('fondeo demo exige key y acredita una sola vez por payload', async (context) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ionpay-funding-idempotency-'))
+  const dbPath = join(directory, 'ionpay.db')
+  const { app, request } = await startApi({ dbPath })
+  context.after(async () => {
+    await app.close()
+    rmSync(directory, { recursive: true, force: true })
+  })
+
+  const unauthenticated = await request('/api/demo/fund', { method: 'POST', body: { amount: '1.00' } })
+  assert.equal(unauthenticated.status, 401)
+  assert.equal(unauthenticated.data.error.code, 'UNAUTHORIZED')
+
+  const invalidSession = await request('/api/demo/fund', {
+    method: 'POST', token: 'token-invalido', body: { amount: '1.00' },
+  })
+  assert.equal(invalidSession.status, 401)
+  assert.equal(invalidSession.data.error.code, 'INVALID_SESSION')
+
+  const user = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Funding Idempotency', phone: '+51970000003', alias: 'funding.idem', password: 'ClaveSegura123' },
+  })
+
+  const missingKey = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, body: { amount: '1.00' },
+  })
+  assert.equal(missingKey.status, 400)
+  assert.equal(missingKey.data.error.code, 'IDEMPOTENCY_KEY_REQUIRED')
+
+  const invalidKey = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: 'short!', body: { amount: '1.00' },
+  })
+  assert.equal(invalidKey.status, 400)
+  assert.equal(invalidKey.data.error.code, 'INVALID_IDEMPOTENCY_KEY')
+
+  const fundingKey = 'funding-idem-001'
+  const firstFunding = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: fundingKey, body: { amount: '50.00' },
+  })
+  const retryFunding = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: fundingKey, body: { amount: '50.0' },
+  })
+  assert.equal(firstFunding.status, 201)
+  assert.equal(retryFunding.status, 201)
+  assert.deepEqual(retryFunding.data, firstFunding.data)
+
+  const reusedPayload = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: fundingKey, body: { amount: '51.00' },
+  })
+  assert.equal(reusedPayload.status, 409)
+  assert.equal(reusedPayload.data.error.code, 'IDEMPOTENCY_KEY_REUSED')
+
+  const invalidRetryKey = 'funding-invalid-retry-001'
+  const invalidAmount = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: invalidRetryKey, body: { amount: '1.001' },
+  })
+  assert.equal(invalidAmount.status, 400)
+  assert.equal(invalidAmount.data.error.code, 'INVALID_AMOUNT')
+  const correctedRetry = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: invalidRetryKey, body: { amount: '1.00' },
+  })
+  assert.equal(correctedRetry.status, 201)
+
+  const wallet = await request('/api/wallet', { token: user.data.token })
+  assert.deepEqual(wallet.data.balances, { PEN: 51 })
+
+  const rollbackKey = 'funding-rollback-001'
+  const triggerDb = new DatabaseSync(dbPath)
+  triggerDb.exec(`
+    CREATE TRIGGER force_idempotency_failure
+    BEFORE INSERT ON idempotency_records
+    WHEN NEW.idempotency_key = '${rollbackKey}'
+    BEGIN
+      SELECT RAISE(ABORT, 'forced idempotency failure');
+    END;
+  `)
+  triggerDb.close()
+
+  const originalConsoleError = console.error
+  let forcedFailure
+  try {
+    console.error = () => {}
+    forcedFailure = await request('/api/demo/fund', {
+      method: 'POST', token: user.data.token, idempotencyKey: rollbackKey, body: { amount: '10.00' },
+    })
+  } finally {
+    console.error = originalConsoleError
+  }
+  assert.equal(forcedFailure.status, 500)
+  assert.equal(forcedFailure.data.error.code, 'INTERNAL_ERROR')
+  const walletAfterFailure = await request('/api/wallet', { token: user.data.token })
+  assert.deepEqual(walletAfterFailure.data.balances, { PEN: 51 })
+
+  const rollbackAudit = new DatabaseSync(dbPath, { readOnly: true })
+  assert.equal(rollbackAudit.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'DEMO_FUNDING'`).get().count, 2)
+  assert.equal(rollbackAudit.prepare(`SELECT COUNT(*) AS count FROM idempotency_records WHERE owner_id = ? AND idempotency_key = ?`).get(user.data.user.id, rollbackKey).count, 0)
+  rollbackAudit.close()
+
+  const dropTriggerDb = new DatabaseSync(dbPath)
+  dropTriggerDb.exec('DROP TRIGGER force_idempotency_failure')
+  dropTriggerDb.close()
+  const retryAfterRollback = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: rollbackKey, body: { amount: '10.00' },
+  })
+  assert.equal(retryAfterRollback.status, 201)
+  const walletAfterRollbackRetry = await request('/api/wallet', { token: user.data.token })
+  assert.deepEqual(walletAfterRollbackRetry.data.balances, { PEN: 61 })
+
+  const auditDb = new DatabaseSync(dbPath, { readOnly: true })
+  const fundingCount = auditDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'DEMO_FUNDING'`).get().count
+  const stored = auditDb.prepare(`SELECT * FROM idempotency_records WHERE owner_id = ? AND idempotency_key = ?`).get(user.data.user.id, fundingKey)
+  auditDb.close()
+  assert.equal(fundingCount, 3)
+  assert.equal(stored.transaction_id, firstFunding.data.transaction.id)
 })
 
 test('parser monetario acepta límites exactos y rechaza formatos ambiguos', () => {
@@ -326,7 +616,7 @@ test('fondeo demo rechaza montos inválidos', async (context) => {
   await request('/api/demo/verify', { method: 'POST', token: user.data.token })
 
   const invalidFunding = await request('/api/demo/fund', {
-    method: 'POST', token: user.data.token, body: { amount: '1.001' },
+    method: 'POST', token: user.data.token, idempotencyKey: 'money-funding-invalid-001', body: { amount: '1.001' },
   })
   assert.equal(invalidFunding.status, 400)
   assert.equal(invalidFunding.data.error.code, 'INVALID_AMOUNT')
