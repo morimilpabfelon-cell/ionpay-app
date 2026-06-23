@@ -71,10 +71,38 @@ export function createDatabase(dbPath = 'data/ionpay.db') {
       UNIQUE(owner_id, idempotency_key)
     );
 
+    CREATE TABLE IF NOT EXISTS payment_requests (
+      id TEXT PRIMARY KEY,
+      requester_user_id TEXT NOT NULL REFERENCES users(id),
+      payer_user_id TEXT NOT NULL REFERENCES users(id),
+      currency TEXT NOT NULL CHECK (currency = 'PEN'),
+      amount INTEGER NOT NULL CHECK (typeof(amount) = 'integer' AND amount > 0),
+      status TEXT NOT NULL CHECK (status IN ('PENDING', 'PAID', 'CANCELLED', 'EXPIRED')),
+      reference TEXT NOT NULL UNIQUE,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      paid_at TEXT,
+      cancelled_at TEXT,
+      expired_at TEXT,
+      paid_transaction_id TEXT REFERENCES ledger_transactions(id),
+      CHECK (requester_user_id != payer_user_id),
+      CHECK (
+        (status = 'PENDING' AND paid_at IS NULL AND cancelled_at IS NULL AND expired_at IS NULL AND paid_transaction_id IS NULL)
+        OR (status = 'PAID' AND paid_at IS NOT NULL AND cancelled_at IS NULL AND expired_at IS NULL AND paid_transaction_id IS NOT NULL)
+        OR (status = 'CANCELLED' AND paid_at IS NULL AND cancelled_at IS NOT NULL AND expired_at IS NULL AND paid_transaction_id IS NULL)
+        OR (status = 'EXPIRED' AND paid_at IS NULL AND cancelled_at IS NULL AND expired_at IS NOT NULL AND paid_transaction_id IS NULL)
+      )
+    );
+
     CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
     CREATE INDEX IF NOT EXISTS idx_entries_transaction ON ledger_entries(transaction_id);
     CREATE INDEX IF NOT EXISTS idx_entries_account ON ledger_entries(account_id);
     CREATE INDEX IF NOT EXISTS idx_idempotency_transaction ON idempotency_records(transaction_id);
+    CREATE INDEX IF NOT EXISTS idx_payment_requests_requester ON payment_requests(requester_user_id, status, created_at);
+    CREATE INDEX IF NOT EXISTS idx_payment_requests_payer ON payment_requests(payer_user_id, status, created_at);
+    CREATE INDEX IF NOT EXISTS idx_payment_requests_expiry ON payment_requests(status, expires_at);
   `)
 
   const now = new Date().toISOString()

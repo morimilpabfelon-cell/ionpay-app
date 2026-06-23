@@ -31,6 +31,16 @@ async function startApi({ dbPath = ':memory:' } = {}) {
   return { app, request }
 }
 
+async function withoutConsoleError(callback) {
+  const originalConsoleError = console.error
+  try {
+    console.error = () => {}
+    return await callback()
+  } finally {
+    console.error = originalConsoleError
+  }
+}
+
 test('flujo financiero V1: registro, KYC, fondeo, envío y actividad PEN', async (context) => {
   const { app, request } = await startApi()
   context.after(() => app.close())
@@ -584,6 +594,466 @@ test('fondeo demo exige key y acredita una sola vez por payload', async (context
   auditDb.close()
   assert.equal(fundingCount, 3)
   assert.equal(stored.transaction_id, firstFunding.data.transaction.id)
+})
+
+test('solicitudes de pago se crean sin mover saldo, son idempotentes y respetan privacidad', async (context) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ionpay-payment-request-create-'))
+  const dbPath = join(directory, 'ionpay.db')
+  const { app, request } = await startApi({ dbPath })
+  context.after(async () => {
+    await app.close()
+    rmSync(directory, { recursive: true, force: true })
+  })
+
+  const requester = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Requester Create', phone: '+51971000001', alias: 'requester.create', password: 'ClaveSegura123' },
+  })
+  const payer = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Payer Create', phone: '+51971000002', alias: 'payer.create', password: 'ClaveSegura123' },
+  })
+  const outsider = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Outsider Create', phone: '+51971000003', alias: 'outsider.create', password: 'ClaveSegura123' },
+  })
+
+  const missingCreateKey = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token,
+    body: { payerAlias: 'payer.create', currency: 'PEN', amount: '1.00' },
+  })
+  assert.equal(missingCreateKey.status, 400)
+  assert.equal(missingCreateKey.data.error.code, 'IDEMPOTENCY_KEY_REQUIRED')
+
+  const createKey = 'payment-request-create-001'
+  const first = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: createKey,
+    body: { payerAlias: 'payer.create', currency: 'PEN', amount: '25.00', note: 'Cena', expiresInDays: 7 },
+  })
+  const retry = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: createKey,
+    body: { expiresInDays: 7, note: 'Cena', amount: '25.0', currency: 'PEN', payerAlias: '@payer.create' },
+  })
+  assert.equal(first.status, 201)
+  assert.equal(first.data.paymentRequest.status, 'PENDING')
+  assert.equal(first.data.paymentRequest.currency, 'PEN')
+  assert.equal(first.data.paymentRequest.amount, 25)
+  assert.equal(first.data.paymentRequest.paidTransactionId, null)
+  assert.deepEqual(retry.data, first.data)
+
+  const reused = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: createKey,
+    body: { payerAlias: 'payer.create', currency: 'PEN', amount: '30.00', note: 'Cena', expiresInDays: 7 },
+  })
+  assert.equal(reused.status, 409)
+  assert.equal(reused.data.error.code, 'IDEMPOTENCY_KEY_REUSED')
+
+  const selfRequest = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: 'payment-request-self-001',
+    body: { payerAlias: 'requester.create', currency: 'PEN', amount: '1.00' },
+  })
+  assert.equal(selfRequest.status, 400)
+  assert.equal(selfRequest.data.error.code, 'SAME_ACCOUNT')
+
+  const invalidAmount = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: 'payment-request-amount-001',
+    body: { payerAlias: 'payer.create', currency: 'PEN', amount: '1.001' },
+  })
+  assert.equal(invalidAmount.status, 400)
+  assert.equal(invalidAmount.data.error.code, 'INVALID_AMOUNT')
+
+  const missingPayer = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: 'payment-request-missing-001',
+    body: { payerAlias: 'missing.payer', currency: 'PEN', amount: '1.00' },
+  })
+  assert.equal(missingPayer.status, 404)
+  assert.equal(missingPayer.data.error.code, 'PAYER_NOT_FOUND')
+
+  const usdtRequest = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: 'payment-request-usdt-001',
+    body: { payerAlias: 'payer.create', currency: 'USDT', amount: '1.00' },
+  })
+  assert.equal(usdtRequest.status, 400)
+  assert.equal(usdtRequest.data.error.code, 'INVALID_CURRENCY')
+
+  const invalidExpiry = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: 'payment-request-expiry-001',
+    body: { payerAlias: 'payer.create', currency: 'PEN', amount: '1.00', expiresInDays: 31 },
+  })
+  assert.equal(invalidExpiry.status, 400)
+  assert.equal(invalidExpiry.data.error.code, 'INVALID_EXPIRY')
+
+  const requesterWallet = await request('/api/wallet', { token: requester.data.token })
+  const payerWallet = await request('/api/wallet', { token: payer.data.token })
+  assert.deepEqual(requesterWallet.data.balances, { PEN: 0 })
+  assert.deepEqual(payerWallet.data.balances, { PEN: 0 })
+
+  const created = await request('/api/payment-requests/created?status=PENDING', { token: requester.data.token })
+  const received = await request('/api/payment-requests/received?status=PENDING', { token: payer.data.token })
+  const outsiderCreated = await request('/api/payment-requests/created?status=PENDING', { token: outsider.data.token })
+  const outsiderReceived = await request('/api/payment-requests/received?status=PENDING', { token: outsider.data.token })
+  assert.deepEqual(created.data.paymentRequests.map((item) => item.id), [first.data.paymentRequest.id])
+  assert.deepEqual(received.data.paymentRequests.map((item) => item.id), [first.data.paymentRequest.id])
+  assert.deepEqual(outsiderCreated.data.paymentRequests, [])
+  assert.deepEqual(outsiderReceived.data.paymentRequests, [])
+  const invalidStatus = await request('/api/payment-requests/created?status=UNKNOWN', { token: requester.data.token })
+  assert.equal(invalidStatus.status, 400)
+  assert.equal(invalidStatus.data.error.code, 'INVALID_PAYMENT_REQUEST_STATUS')
+
+  const auditDb = new DatabaseSync(dbPath, { readOnly: true })
+  assert.equal(auditDb.prepare('SELECT COUNT(*) AS count FROM payment_requests').get().count, 1)
+  assert.equal(auditDb.prepare(`SELECT COUNT(*) AS count FROM idempotency_records WHERE endpoint = '/api/payment-requests'`).get().count, 1)
+  assert.equal(auditDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'PAYMENT_REQUEST_PAYMENT'`).get().count, 0)
+  auditDb.close()
+})
+
+test('pago de solicitud es atómico, autorizado e idempotente ante concurrencia', async (context) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ionpay-payment-request-pay-'))
+  const dbPath = join(directory, 'ionpay.db')
+  const { app, request } = await startApi({ dbPath })
+  context.after(async () => {
+    await app.close()
+    rmSync(directory, { recursive: true, force: true })
+  })
+
+  const requester = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Requester Pay', phone: '+51972000001', alias: 'requester.pay', password: 'ClaveSegura123' },
+  })
+  const payer = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Payer Pay', phone: '+51972000002', alias: 'payer.pay', password: 'ClaveSegura123' },
+  })
+  const outsider = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Outsider Pay', phone: '+51972000003', alias: 'outsider.pay', password: 'ClaveSegura123' },
+  })
+  for (const user of [requester, outsider]) {
+    await request('/api/demo/verify', { method: 'POST', token: user.data.token })
+  }
+  await request('/api/demo/fund', {
+    method: 'POST', token: payer.data.token, idempotencyKey: 'payment-pay-funding-001', body: { amount: '100.00' },
+  })
+
+  const created = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: 'payment-pay-create-001',
+    body: { payerAlias: 'payer.pay', currency: 'PEN', amount: '25.00', note: 'Cuenta compartida' },
+  })
+  const paymentRequestId = created.data.paymentRequest.id
+
+  const unverifiedPayer = await request(`/api/payment-requests/${paymentRequestId}/pay`, {
+    method: 'POST', token: payer.data.token, idempotencyKey: 'payment-pay-unverified-001', body: {},
+  })
+  assert.equal(unverifiedPayer.status, 403)
+  assert.equal(unverifiedPayer.data.error.code, 'KYC_REQUIRED')
+  await request('/api/demo/verify', { method: 'POST', token: payer.data.token })
+
+  const missingPayKey = await request(`/api/payment-requests/${paymentRequestId}/pay`, {
+    method: 'POST', token: payer.data.token, body: {},
+  })
+  assert.equal(missingPayKey.status, 400)
+  assert.equal(missingPayKey.data.error.code, 'IDEMPOTENCY_KEY_REQUIRED')
+
+  const requesterAttempt = await request(`/api/payment-requests/${paymentRequestId}/pay`, {
+    method: 'POST', token: requester.data.token, idempotencyKey: 'payment-pay-requester-001', body: {},
+  })
+  const outsiderAttempt = await request(`/api/payment-requests/${paymentRequestId}/pay`, {
+    method: 'POST', token: outsider.data.token, idempotencyKey: 'payment-pay-outsider-001', body: {},
+  })
+  assert.equal(requesterAttempt.status, 403)
+  assert.equal(requesterAttempt.data.error.code, 'PAYMENT_REQUEST_FORBIDDEN')
+  assert.equal(outsiderAttempt.status, 403)
+  assert.equal(outsiderAttempt.data.error.code, 'PAYMENT_REQUEST_FORBIDDEN')
+
+  const partialPayment = await request(`/api/payment-requests/${paymentRequestId}/pay`, {
+    method: 'POST', token: payer.data.token, idempotencyKey: 'payment-pay-partial-001', body: { amount: '20.00' },
+  })
+  assert.equal(partialPayment.status, 400)
+  assert.equal(partialPayment.data.error.code, 'PAYMENT_BODY_NOT_ALLOWED')
+
+  const payKey = 'payment-pay-concurrent-001'
+  const [firstPay, retryPay] = await Promise.all([
+    request(`/api/payment-requests/${paymentRequestId}/pay`, {
+      method: 'POST', token: payer.data.token, idempotencyKey: payKey, body: {},
+    }),
+    request(`/api/payment-requests/${paymentRequestId}/pay`, {
+      method: 'POST', token: payer.data.token, idempotencyKey: payKey, body: {},
+    }),
+  ])
+  assert.equal(firstPay.status, 200)
+  assert.equal(retryPay.status, 200)
+  assert.deepEqual(retryPay.data, firstPay.data)
+  assert.equal(firstPay.data.paymentRequest.status, 'PAID')
+  assert.equal(firstPay.data.paymentRequest.paidTransactionId, firstPay.data.transaction.id)
+
+  const requesterWallet = await request('/api/wallet', { token: requester.data.token })
+  const payerWallet = await request('/api/wallet', { token: payer.data.token })
+  assert.deepEqual(requesterWallet.data.balances, { PEN: 25 })
+  assert.deepEqual(payerWallet.data.balances, { PEN: 75 })
+
+  const reusedPayload = await request(`/api/payment-requests/${paymentRequestId}/pay`, {
+    method: 'POST', token: payer.data.token, idempotencyKey: payKey, body: { amount: '20.00' },
+  })
+  assert.equal(reusedPayload.status, 409)
+  assert.equal(reusedPayload.data.error.code, 'IDEMPOTENCY_KEY_REUSED')
+
+  const secondPayment = await request(`/api/payment-requests/${paymentRequestId}/pay`, {
+    method: 'POST', token: payer.data.token, idempotencyKey: 'payment-pay-second-001', body: {},
+  })
+  assert.equal(secondPayment.status, 409)
+  assert.equal(secondPayment.data.error.code, 'PAYMENT_REQUEST_NOT_PENDING')
+
+  const cancelPaid = await request(`/api/payment-requests/${paymentRequestId}/cancel`, {
+    method: 'POST', token: requester.data.token,
+  })
+  assert.equal(cancelPaid.status, 409)
+  assert.equal(cancelPaid.data.error.code, 'PAYMENT_REQUEST_NOT_PENDING')
+
+  const createdPaid = await request('/api/payment-requests/created?status=PAID', { token: requester.data.token })
+  assert.deepEqual(createdPaid.data.paymentRequests.map((item) => item.id), [paymentRequestId])
+  const payerActivity = await request('/api/activity', { token: payer.data.token })
+  assert.ok(payerActivity.data.activity.some((item) => item.type === 'PAYMENT_REQUEST_PAYMENT' && item.currency === 'PEN' && item.amount === -25))
+  assert.equal(payerActivity.data.activity.some((item) => item.currency === 'USDT'), false)
+
+  const auditDb = new DatabaseSync(dbPath, { readOnly: true })
+  const stored = auditDb.prepare('SELECT * FROM payment_requests WHERE id = ?').get(paymentRequestId)
+  const transactionCount = auditDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'PAYMENT_REQUEST_PAYMENT'`).get().count
+  const entries = auditDb.prepare('SELECT currency, amount FROM ledger_entries WHERE transaction_id = ?').all(stored.paid_transaction_id)
+  const invalidPaid = auditDb.prepare(`SELECT COUNT(*) AS count FROM payment_requests WHERE status = 'PAID' AND paid_transaction_id IS NULL`).get().count
+  const failedAttemptRecords = auditDb.prepare(`SELECT COUNT(*) AS count FROM idempotency_records WHERE idempotency_key IN ('payment-pay-unverified-001', 'payment-pay-requester-001', 'payment-pay-outsider-001', 'payment-pay-partial-001', 'payment-pay-second-001')`).get().count
+  auditDb.close()
+  assert.equal(stored.status, 'PAID')
+  assert.equal(stored.paid_transaction_id, firstPay.data.transaction.id)
+  assert.equal(transactionCount, 1)
+  assert.equal(entries.length, 2)
+  assert.equal(entries.reduce((sum, entry) => sum + entry.amount, 0), 0)
+  assert.ok(entries.every((entry) => entry.currency === 'PEN'))
+  assert.equal(invalidPaid, 0)
+  assert.equal(failedAttemptRecords, 0)
+})
+
+test('fondos insuficientes, cancelación y expiración lazy preservan saldos y estados terminales', async (context) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ionpay-payment-request-states-'))
+  const dbPath = join(directory, 'ionpay.db')
+  const { app, request } = await startApi({ dbPath })
+  context.after(async () => {
+    await app.close()
+    rmSync(directory, { recursive: true, force: true })
+  })
+
+  const requester = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Requester States', phone: '+51973000001', alias: 'requester.states', password: 'ClaveSegura123' },
+  })
+  const payer = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Payer States', phone: '+51973000002', alias: 'payer.states', password: 'ClaveSegura123' },
+  })
+  const outsider = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Outsider States', phone: '+51973000003', alias: 'outsider.states', password: 'ClaveSegura123' },
+  })
+  for (const user of [payer, outsider]) {
+    await request('/api/demo/verify', { method: 'POST', token: user.data.token })
+  }
+
+  const cancellable = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: 'payment-states-create-001',
+    body: { payerAlias: 'payer.states', amount: '40.00', currency: 'PEN' },
+  })
+  const cancellableId = cancellable.data.paymentRequest.id
+  const insufficientKey = 'payment-states-insufficient-001'
+  const insufficient = await request(`/api/payment-requests/${cancellableId}/pay`, {
+    method: 'POST', token: payer.data.token, idempotencyKey: insufficientKey, body: {},
+  })
+  assert.equal(insufficient.status, 409)
+  assert.equal(insufficient.data.error.code, 'INSUFFICIENT_FUNDS')
+
+  const payerCancel = await request(`/api/payment-requests/${cancellableId}/cancel`, {
+    method: 'POST', token: payer.data.token,
+  })
+  const outsiderCancel = await request(`/api/payment-requests/${cancellableId}/cancel`, {
+    method: 'POST', token: outsider.data.token,
+  })
+  assert.equal(payerCancel.status, 403)
+  assert.equal(outsiderCancel.status, 403)
+
+  const cancelled = await request(`/api/payment-requests/${cancellableId}/cancel`, {
+    method: 'POST', token: requester.data.token,
+  })
+  assert.equal(cancelled.status, 200)
+  assert.equal(cancelled.data.paymentRequest.status, 'CANCELLED')
+  assert.equal(cancelled.data.paymentRequest.paidTransactionId, null)
+
+  const payCancelled = await request(`/api/payment-requests/${cancellableId}/pay`, {
+    method: 'POST', token: payer.data.token, idempotencyKey: 'payment-states-cancelled-pay-001', body: {},
+  })
+  assert.equal(payCancelled.status, 409)
+  assert.equal(payCancelled.data.error.code, 'PAYMENT_REQUEST_NOT_PENDING')
+
+  const cancelAgain = await request(`/api/payment-requests/${cancellableId}/cancel`, {
+    method: 'POST', token: requester.data.token,
+  })
+  assert.equal(cancelAgain.status, 409)
+  assert.equal(cancelAgain.data.error.code, 'PAYMENT_REQUEST_NOT_PENDING')
+
+  const expiring = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: 'payment-states-expire-001',
+    body: { payerAlias: 'payer.states', amount: '10.00', currency: 'PEN', expiresInDays: 1 },
+  })
+  const expiringId = expiring.data.paymentRequest.id
+  const expiryDb = new DatabaseSync(dbPath)
+  expiryDb.prepare(`UPDATE payment_requests SET expires_at = '2000-01-01T00:00:00.000Z' WHERE id = ?`).run(expiringId)
+  expiryDb.close()
+
+  const payExpired = await request(`/api/payment-requests/${expiringId}/pay`, {
+    method: 'POST', token: payer.data.token, idempotencyKey: 'payment-states-expired-pay-001', body: {},
+  })
+  assert.equal(payExpired.status, 409)
+  assert.equal(payExpired.data.error.code, 'PAYMENT_REQUEST_EXPIRED')
+  const pendingReceived = await request('/api/payment-requests/received?status=PENDING', { token: payer.data.token })
+  const expiredReceived = await request('/api/payment-requests/received?status=EXPIRED', { token: payer.data.token })
+  assert.equal(pendingReceived.data.paymentRequests.some((item) => item.id === expiringId), false)
+  assert.equal(expiredReceived.data.paymentRequests.some((item) => item.id === expiringId), true)
+  const cancelExpired = await request(`/api/payment-requests/${expiringId}/cancel`, {
+    method: 'POST', token: requester.data.token,
+  })
+  assert.equal(cancelExpired.status, 409)
+  assert.equal(cancelExpired.data.error.code, 'PAYMENT_REQUEST_EXPIRED')
+
+  const requesterWallet = await request('/api/wallet', { token: requester.data.token })
+  const payerWallet = await request('/api/wallet', { token: payer.data.token })
+  assert.deepEqual(requesterWallet.data.balances, { PEN: 0 })
+  assert.deepEqual(payerWallet.data.balances, { PEN: 0 })
+
+  const auditDb = new DatabaseSync(dbPath, { readOnly: true })
+  const storedCancelled = auditDb.prepare('SELECT * FROM payment_requests WHERE id = ?').get(cancellableId)
+  const storedExpired = auditDb.prepare('SELECT * FROM payment_requests WHERE id = ?').get(expiringId)
+  const paymentTransactions = auditDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'PAYMENT_REQUEST_PAYMENT'`).get().count
+  const insufficientRecords = auditDb.prepare(`SELECT COUNT(*) AS count FROM idempotency_records WHERE owner_id = ? AND idempotency_key = ?`).get(payer.data.user.id, insufficientKey).count
+  auditDb.close()
+  assert.equal(storedCancelled.status, 'CANCELLED')
+  assert.equal(storedCancelled.paid_transaction_id, null)
+  assert.equal(storedExpired.status, 'EXPIRED')
+  assert.equal(storedExpired.paid_transaction_id, null)
+  assert.equal(paymentTransactions, 0)
+  assert.equal(insufficientRecords, 0)
+})
+
+test('fallos entre ledger, estado e idempotencia revierten completamente el pago', async (context) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ionpay-payment-request-rollback-'))
+  const dbPath = join(directory, 'ionpay.db')
+  const { app, request } = await startApi({ dbPath })
+  context.after(async () => {
+    await app.close()
+    rmSync(directory, { recursive: true, force: true })
+  })
+
+  const requester = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Requester Rollback', phone: '+51974000001', alias: 'requester.rollback', password: 'ClaveSegura123' },
+  })
+  const payer = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Payer Rollback', phone: '+51974000002', alias: 'payer.rollback', password: 'ClaveSegura123' },
+  })
+  await request('/api/demo/verify', { method: 'POST', token: payer.data.token })
+  await request('/api/demo/fund', {
+    method: 'POST', token: payer.data.token, idempotencyKey: 'payment-rollback-fund-001', body: { amount: '100.00' },
+  })
+
+  const updateFailureRequest = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: 'payment-rollback-create-a-001',
+    body: { payerAlias: 'payer.rollback', amount: '10.00', currency: 'PEN' },
+  })
+  const idempotencyFailureRequest = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: 'payment-rollback-create-b-001',
+    body: { payerAlias: 'payer.rollback', amount: '10.00', currency: 'PEN' },
+  })
+  const updateFailureId = updateFailureRequest.data.paymentRequest.id
+  const idempotencyFailureId = idempotencyFailureRequest.data.paymentRequest.id
+
+  const triggerUpdateDb = new DatabaseSync(dbPath)
+  triggerUpdateDb.exec(`
+    CREATE TRIGGER force_payment_request_update_failure
+    BEFORE UPDATE OF status ON payment_requests
+    WHEN OLD.id = '${updateFailureId}' AND NEW.status = 'PAID'
+    BEGIN
+      SELECT RAISE(ABORT, 'forced payment request update failure');
+    END;
+  `)
+  triggerUpdateDb.close()
+
+  const updateFailureKey = 'payment-rollback-update-001'
+  const updateFailure = await withoutConsoleError(() => request(`/api/payment-requests/${updateFailureId}/pay`, {
+    method: 'POST', token: payer.data.token, idempotencyKey: updateFailureKey, body: {},
+  }))
+  assert.equal(updateFailure.status, 500)
+  assert.equal(updateFailure.data.error.code, 'INTERNAL_ERROR')
+
+  const afterUpdateFailureDb = new DatabaseSync(dbPath, { readOnly: true })
+  assert.equal(afterUpdateFailureDb.prepare('SELECT status FROM payment_requests WHERE id = ?').get(updateFailureId).status, 'PENDING')
+  assert.equal(afterUpdateFailureDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'PAYMENT_REQUEST_PAYMENT'`).get().count, 0)
+  assert.equal(afterUpdateFailureDb.prepare(`SELECT COUNT(*) AS count FROM idempotency_records WHERE owner_id = ? AND idempotency_key = ?`).get(payer.data.user.id, updateFailureKey).count, 0)
+  afterUpdateFailureDb.close()
+  const payerAfterUpdateFailure = await request('/api/wallet', { token: payer.data.token })
+  const requesterAfterUpdateFailure = await request('/api/wallet', { token: requester.data.token })
+  assert.deepEqual(payerAfterUpdateFailure.data.balances, { PEN: 100 })
+  assert.deepEqual(requesterAfterUpdateFailure.data.balances, { PEN: 0 })
+
+  const dropUpdateTriggerDb = new DatabaseSync(dbPath)
+  dropUpdateTriggerDb.exec('DROP TRIGGER force_payment_request_update_failure')
+  dropUpdateTriggerDb.close()
+  const updateRetry = await request(`/api/payment-requests/${updateFailureId}/pay`, {
+    method: 'POST', token: payer.data.token, idempotencyKey: updateFailureKey, body: {},
+  })
+  assert.equal(updateRetry.status, 200)
+
+  const idempotencyFailureKey = 'payment-rollback-idem-001'
+  const triggerIdempotencyDb = new DatabaseSync(dbPath)
+  triggerIdempotencyDb.exec(`
+    CREATE TRIGGER force_payment_request_idempotency_failure
+    BEFORE INSERT ON idempotency_records
+    WHEN NEW.idempotency_key = '${idempotencyFailureKey}'
+    BEGIN
+      SELECT RAISE(ABORT, 'forced payment request idempotency failure');
+    END;
+  `)
+  triggerIdempotencyDb.close()
+
+  const idempotencyFailure = await withoutConsoleError(() => request(`/api/payment-requests/${idempotencyFailureId}/pay`, {
+    method: 'POST', token: payer.data.token, idempotencyKey: idempotencyFailureKey, body: {},
+  }))
+  assert.equal(idempotencyFailure.status, 500)
+  assert.equal(idempotencyFailure.data.error.code, 'INTERNAL_ERROR')
+
+  const afterIdempotencyFailureDb = new DatabaseSync(dbPath, { readOnly: true })
+  assert.equal(afterIdempotencyFailureDb.prepare('SELECT status FROM payment_requests WHERE id = ?').get(idempotencyFailureId).status, 'PENDING')
+  assert.equal(afterIdempotencyFailureDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'PAYMENT_REQUEST_PAYMENT'`).get().count, 1)
+  assert.equal(afterIdempotencyFailureDb.prepare(`SELECT COUNT(*) AS count FROM idempotency_records WHERE owner_id = ? AND idempotency_key = ?`).get(payer.data.user.id, idempotencyFailureKey).count, 0)
+  afterIdempotencyFailureDb.close()
+  const payerAfterIdempotencyFailure = await request('/api/wallet', { token: payer.data.token })
+  const requesterAfterIdempotencyFailure = await request('/api/wallet', { token: requester.data.token })
+  assert.deepEqual(payerAfterIdempotencyFailure.data.balances, { PEN: 90 })
+  assert.deepEqual(requesterAfterIdempotencyFailure.data.balances, { PEN: 10 })
+
+  const dropIdempotencyTriggerDb = new DatabaseSync(dbPath)
+  dropIdempotencyTriggerDb.exec('DROP TRIGGER force_payment_request_idempotency_failure')
+  dropIdempotencyTriggerDb.close()
+  const idempotencyRetry = await request(`/api/payment-requests/${idempotencyFailureId}/pay`, {
+    method: 'POST', token: payer.data.token, idempotencyKey: idempotencyFailureKey, body: {},
+  })
+  assert.equal(idempotencyRetry.status, 200)
+
+  const payerFinal = await request('/api/wallet', { token: payer.data.token })
+  const requesterFinal = await request('/api/wallet', { token: requester.data.token })
+  assert.deepEqual(payerFinal.data.balances, { PEN: 80 })
+  assert.deepEqual(requesterFinal.data.balances, { PEN: 20 })
+
+  const finalDb = new DatabaseSync(dbPath, { readOnly: true })
+  assert.equal(finalDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'PAYMENT_REQUEST_PAYMENT'`).get().count, 2)
+  assert.equal(finalDb.prepare(`SELECT COUNT(*) AS count FROM payment_requests WHERE status = 'PAID' AND paid_transaction_id IS NULL`).get().count, 0)
+  finalDb.close()
 })
 
 test('parser monetario acepta límites exactos y rechaza formatos ambiguos', () => {
