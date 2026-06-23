@@ -143,7 +143,7 @@ function Home({ state, setAction, setTab, openReceipt }: { state: IonState; setA
       <div className="home-grid">
         <div>
           <BalanceCard state={state} visible={visible} setVisible={setVisible} />
-          <section className="quick-actions">{actions.map(({ id, label, Icon, run }) => <button key={id} onClick={run}><span><Icon /></span><strong>{label}</strong></button>)}</section>
+          <section className="quick-actions" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>{actions.map(({ id, label, Icon, run }) => <button key={id} onClick={run}><span><Icon /></span><strong>{label}</strong></button>)}</section>
           <section className="section-card activity-preview">
             <div className="section-title"><div><span className="eyebrow">Movimientos</span><h2>Actividad reciente</h2></div><button onClick={() => setTab('activity')}>Ver todo <ChevronIcon /></button></div>
             <div>{transactions.length ? transactions.slice(0, 4).map((item) => <TransactionRow key={item.id} item={item} onOpen={() => openReceipt(item)} />) : <EmptyActivity />}</div>
@@ -401,6 +401,7 @@ export default function App() {
     <div className="app-shell">
       <Sidebar tab={tab} setTab={setTab} mode={mode} />
       <main className="app-content">
+        {mode === 'demo' && <div className="demo-caption">Modo demo · fondos simulados · no mueve dinero real</div>}
         {tab === 'home' && <Home state={state} setAction={setAction} setTab={setTab} openReceipt={setReceipt} />}
         {tab === 'activity' && <ActivityPage transactions={state.transactions} openReceipt={setReceipt} />}
         {tab === 'services' && <ServicesPage state={state} openAction={(next) => setAction(next)} />}
