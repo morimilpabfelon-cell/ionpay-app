@@ -44,21 +44,21 @@ function Onboarding({
   const [providerMessage, setProviderMessage] = useState('')
 
   const submit = async (event: FormEvent) => {
-  event.preventDefault()
-  setError('')
-  setSubmitting(true)
-  try {
-    if (step === 'register') {
-      await onRegister({ name: name.trim(), phone: phone.trim(), alias: alias.trim().replace(/^@/, ''), password })
-    } else {
-      await onLogin({ phone: phone.trim(), password })
+    event.preventDefault()
+    setError('')
+    setSubmitting(true)
+    try {
+      if (step === 'register') {
+        await onRegister({ name: name.trim(), phone: phone.trim(), alias: alias.trim().replace(/^@/, ''), password })
+      } else {
+        await onLogin({ phone: phone.trim(), password })
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'No se pudo completar la solicitud.')
+    } finally {
+      setSubmitting(false)
     }
-  } catch (cause) {
-    setError(cause instanceof Error ? cause.message : 'No se pudo completar la solicitud.')
-  } finally {
-    setSubmitting(false)
   }
-}
 
   const handleProviderClick = (provider: string) => {
     setProviderMessage(`${provider} Sign-In todavía no está conectado en esta versión local.`)
@@ -69,17 +69,17 @@ function Onboarding({
       <section className="welcome-art">
         <Logo />
         <div className="welcome-copy">
-          <span className="eyebrow light">Tu dinero. Un solo lugar.</span>
+          <span className="eyebrow light">Wallet de pagos V1</span>
           <h1>
-            Muévelo.<br />Úsalo.<br />
-            <em>Hazlo crecer.</em>
+            Muévelo.<br />Págalo.<br />
+            <em>Contrólalo.</em>
           </h1>
-        <p>Saldo fiat, pagos, cobros, historial y comprobantes en una experiencia simple y trazable.</p>
+          <p>Saldo fiat, pagos, cobros, historial y comprobantes en una experiencia simple y trazable.</p>
         </div>
         <div className="orb orb-one" />
         <div className="orb orb-two" />
         <div className="security-note">
-          <ShieldIcon /> Cifrado y protección en cada movimiento
+          <ShieldIcon /> Protección básica para operar con claridad
         </div>
       </section>
       <section className="welcome-panel">
@@ -89,7 +89,7 @@ function Onboarding({
         {step === 'welcome' ? (
           <div className="auth-box">
             <span className="eyebrow">Bienvenido a IONPAY</span>
-            <h2>Tu billetera empieza aquí</h2>
+            <h2>Tu billetera de pagos empieza aquí</h2>
             <p>
               Crea tu cuenta para gestionar saldo fiat, pagos y cobros. Consulta después
               tu historial y comprobantes con trazabilidad clara.
