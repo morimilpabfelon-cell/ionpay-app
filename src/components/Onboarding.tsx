@@ -74,7 +74,7 @@ function Onboarding({
             Muévelo.<br />Úsalo.<br />
             <em>Hazlo crecer.</em>
           </h1>
-        <p>Pagos, liquidez e inversión digital conectados en una experiencia simple.</p>
+        <p>Saldo fiat, pagos, cobros, historial y comprobantes en una experiencia simple y trazable.</p>
         </div>
         <div className="orb orb-one" />
         <div className="orb orb-two" />
@@ -91,8 +91,8 @@ function Onboarding({
             <span className="eyebrow">Bienvenido a IONPAY</span>
             <h2>Tu billetera empieza aquí</h2>
             <p>
-              Crea tu cuenta ahora. Verifica tu identidad después cuando quieras
-              mover más dinero, usar tarjeta o conectar IonExchange.
+              Crea tu cuenta para gestionar saldo fiat, pagos y cobros. Consulta después
+              tu historial y comprobantes con trazabilidad clara.
             </p>
             {checking && (
               <div className="connection-note">
