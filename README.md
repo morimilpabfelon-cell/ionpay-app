@@ -30,7 +30,11 @@ El error a evitar es construir wallet, pagos, QR, comercio, Android, iOS, exchan
 Fase activa:
 
 - **Phase 1.5 — Frontend API Integration for Transfers and Payment Requests**
-- Estado: **Needs Scope / Approved for implementation after Scope Guardian gate**
+- Issue: **#16**
+- Estado: **APPROVED FOR IMPLEMENTATION**
+- Scope Guardian: **APPROVED FOR IMPLEMENTATION**
+- Alcance permitido: **frontend-only en `src/**`**.
+- Archivos bloqueados salvo aprobación separada: `server/**`, `package.json`, `pnpm-lock.yaml`, `android/**`, Figma y Notion.
 - Riesgo: **R3** porque conecta frontend con rutas que pueden iniciar movimientos de saldo.
 - Reviewer obligatorio posterior: **Financial Safety Reviewer / Security & Ledger Auditor**.
 
