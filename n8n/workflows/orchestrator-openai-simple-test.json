@@ -1,0 +1,107 @@
+{
+  "name": "ionPAY - OpenAI Simple Orchestrator Test",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "cbfc523e-c05c-4ba7-9bee-7a89cf35f554",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "21d74118-e570-4865-a11c-e7b28c30128e",
+              "name": "test_mode",
+              "value": "fixed_text_openai_connectivity",
+              "type": "string"
+            },
+            {
+              "id": "92557ca2-235d-4110-9f5e-2951e35800dd",
+              "name": "project",
+              "value": "ionPAY",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bf899141-ac28-4a92-9345-cf62397b100d",
+      "name": "Set Test Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -280,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "Actúa como ionPAY Agent Orchestrator & Memory Manager.\n\nClasifica esta tarea:\n\nProyecto: ionPAY\n\nTarea:\nRevisar si la corrección de transferencias atómicas pertenece a V1 y qué agente debe actuar primero.\n\nEstado actual:\nV1 en construcción. Riesgo crítico: operaciones de dinero deben ser atómicas. Existe memoria operativa en Notion: ionPAY Agent Operating System.\n\nÚltima decisión:\nNo agregar features nuevas. Priorizar ledger, pagos, wallet, seguridad, trazabilidad y pruebas.\n\nREGLAS OBLIGATORIAS:\n\n1. Usa solamente estos nombres de agentes: ionPAY Product Architect; ionPAY Scope Guardian; ionPAY R2 Scope Planner; ionPAY UI/UX Designer; ionPAY Frontend Surface Implementer; ionPAY Frontend Surface Reviewer; ionPAY Software Engineer; ionPAY Financial Safety Reviewer; ionPAY Operating Executor; Codex.\n2. No inventes agentes, roles o revisores.\n3. prioridad debe ser exactamente uno de: P0, P1, P2, P3, P4, P5.\n4. riesgo debe ser exactamente uno de: normal, medio, crítico.\n5. estado_actual y estado_notion deben ser exactamente uno de: Inbox, Needs Product, Needs Scope, Needs R2 Review, Needs Engineering, Needs Financial Review, Needs UX, Needs Frontend Implementation, Needs Frontend Review, Ready for Execution, In Codex, Needs Review, Approved, Blocked, Rejected, Later.\n6. Si la tarea toca ledger, wallet, saldo, pagos, auth o DB, usa prioridad P1 y riesgo crítico.\n7. Para esta tarea, siguiente_agente debe ser ionPAY Software Engineer.\n8. Para esta tarea, revisores_posteriores debe ser [\"ionPAY Financial Safety Reviewer\"].\n9. Para esta tarea, puede_llegar_a_codex debe ser false.\n10. Responde solo JSON válido, sin markdown y sin explicación adicional.\n\nRESPUESTA OBLIGATORIA PARA ESTA PRUEBA:\n\n{\n  \"veredicto\": \"requiere revisión técnica antes de ejecución\",\n  \"prioridad\": \"P1\",\n  \"area\": \"ledger / pagos / backend\",\n  \"riesgo\": \"crítico\",\n  \"estado_actual\": \"Needs Engineering\",\n  \"siguiente_agente\": \"ionPAY Software Engineer\",\n  \"revisores_posteriores\": [\"ionPAY Financial Safety Reviewer\"],\n  \"estado_notion\": \"Needs Engineering\",\n  \"puede_llegar_a_codex\": false,\n  \"siguiente_paso\": \"Enviar la tarea al ionPAY Software Engineer para auditoría técnica y prompt de corrección; después exigir revisión de ionPAY Financial Safety Reviewer antes de Codex.\"\n}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8fc31403-ec9d-4dac-88e6-43e8b75a6e9a",
+      "name": "OpenAI Direct Chat",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        0,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Test Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Test Context": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Direct Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c7c3e5da-49e4-4da6-9273-ab6170857999",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

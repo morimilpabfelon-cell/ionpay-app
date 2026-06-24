@@ -1,0 +1,199 @@
+{
+  "name": "ionPAY - Orchestrator Notion Logging Test",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "d5facf7e-cf14-4a5a-b22d-411d93e1b1d7",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -620,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "Actúa como ionPAY Agent Orchestrator & Memory Manager.\n\nClasifica esta tarea:\n\nProyecto: ionPAY\n\nTarea:\nRevisar si la corrección de transferencias atómicas pertenece a V1 y qué agente debe actuar primero.\n\nEstado actual:\nV1 en construcción. Riesgo crítico: operaciones de dinero deben ser atómicas.\n\nReglas obligatorias: usa prioridad P1, riesgo crítico, estado Needs Engineering, siguiente agente ionPAY Software Engineer, revisor posterior ionPAY Financial Safety Reviewer y puede_llegar_a_codex false. No inventes agentes.\n\nResponde solamente este JSON válido, sin markdown:\n{\n  \"veredicto\": \"requiere revisión técnica antes de ejecución\",\n  \"prioridad\": \"P1\",\n  \"area\": \"ledger / pagos / backend\",\n  \"riesgo\": \"crítico\",\n  \"estado_actual\": \"Needs Engineering\",\n  \"siguiente_agente\": \"ionPAY Software Engineer\",\n  \"revisores_posteriores\": [\"ionPAY Financial Safety Reviewer\"],\n  \"estado_notion\": \"Needs Engineering\",\n  \"puede_llegar_a_codex\": false,\n  \"siguiente_paso\": \"Enviar a ingeniería y después exigir revisión financiera.\"\n}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ea95766d-b07d-4975-838e-e14e26bbf2b2",
+      "name": "OpenAI Direct Chat",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        -380,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "eefbd6b3-1c68-4ff1-b7f0-4a5957924df6",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "aa740758-978f-4252-b84f-d5ba023e0927",
+              "name": "source",
+              "value": "n8n-local-test",
+              "type": "string"
+            },
+            {
+              "id": "3736787f-e177-4576-a3a9-a3db9034ee4a",
+              "name": "workflow",
+              "value": "ionPAY - Orchestrator Notion Logging Test",
+              "type": "string"
+            },
+            {
+              "id": "519f943d-e62a-408d-8725-3cde3dfc0864",
+              "name": "prioridad",
+              "value": "P1",
+              "type": "string"
+            },
+            {
+              "id": "70bfa287-3c6f-481c-aa54-08cdd4bd9c85",
+              "name": "riesgo",
+              "value": "crítico",
+              "type": "string"
+            },
+            {
+              "id": "f756bc58-082e-4881-83bf-5239591f1afb",
+              "name": "estado_actual",
+              "value": "Needs Engineering",
+              "type": "string"
+            },
+            {
+              "id": "e15090e9-cb05-4457-b74e-e377d95989cd",
+              "name": "siguiente_agente",
+              "value": "ionPAY Software Engineer",
+              "type": "string"
+            },
+            {
+              "id": "8291dfc8-b860-434e-9c01-522fd4c6bfff",
+              "name": "revisores_posteriores",
+              "value": [
+                "ionPAY Financial Safety Reviewer"
+              ],
+              "type": "array"
+            },
+            {
+              "id": "fa556101-a135-4194-965c-c5cd4ee026ad",
+              "name": "puede_llegar_a_codex",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "186f093c-a9c9-4d18-9667-c328621fd968",
+              "name": "raw_output",
+              "value": "={{ JSON.stringify($json) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3874095b-39bf-42dd-b51e-c497fcd2de1e",
+      "name": "Prepare Notion Log Record",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "block",
+        "operation": "append",
+        "blockId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "blockUi": {
+          "blockValues": [
+            {
+              "type": "paragraph",
+              "textContent": "={{ ['timestamp: ' + $json.timestamp, 'source: ' + $json.source, 'workflow: ' + $json.workflow, 'prioridad: ' + $json.prioridad, 'riesgo: ' + $json.riesgo, 'estado_actual: ' + $json.estado_actual, 'siguiente_agente: ' + $json.siguiente_agente, 'revisores_posteriores: ' + JSON.stringify($json.revisores_posteriores), 'puede_llegar_a_codex: ' + $json.puede_llegar_a_codex, 'raw_output: ' + $json.raw_output].join('\\n') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3e8c58ae-b70c-462b-b10b-cb402ef23ef2",
+      "name": "Notion Append Test Log",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        180,
+        0
+      ],
+      "disabled": true,
+      "notesInFlow": true,
+      "notes": "MANUAL CONFIGURATION REQUIRED. Select a local Notion credential and choose only ionPAY Agent Operating System / 06_Context Packets or 02_Task Pipeline. Never target original product documentation."
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Direct Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Direct Chat": {
+      "main": [
+        [
+          {
+            "node": "Prepare Notion Log Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Notion Log Record": {
+      "main": [
+        [
+          {
+            "node": "Notion Append Test Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "08339e1d-f3c7-4781-af68-b0637217c6c4",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
