@@ -410,6 +410,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
             const payer = findUserByAlias.get(payerAlias)
             if (!payer) throw new ApiError(404, 'PAYER_NOT_FOUND', 'No encontramos al pagador.')
             if (payer.id === user.id) throw new ApiError(400, 'SAME_ACCOUNT', 'No puedes solicitarte un pago a ti mismo.')
+            assertAccountWalletOperable(findUserById.get(user.id))
             const id = randomUUID()
             const createdAt = now().toISOString()
             const expiresAt = new Date(Date.parse(createdAt) + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
@@ -558,7 +559,6 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
 
       if (request.method === 'POST' && url.pathname === '/api/transfers') {
         const user = authenticate(request)
-        assertAccountWalletOperable(user)
         const idempotencyKey = requireIdempotencyKey(request)
         const body = await readBody(request)
         const recipientAlias = requiredText(body.recipientAlias, 'Destinatario', 3).toLowerCase().replace(/^@/, '')
@@ -611,7 +611,6 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
 
       if (demoMode && request.method === 'POST' && url.pathname === '/api/demo/fund') {
         const user = authenticate(request)
-        assertAccountWalletOperable(user)
         const idempotencyKey = requireIdempotencyKey(request)
         const body = await readBody(request)
         const amount = parsePenMinor(body.amount)
