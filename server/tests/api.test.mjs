@@ -63,7 +63,7 @@ test('flujo financiero V1: registro, KYC, fondeo, envío y actividad PEN', async
   assert.equal(bob.status, 201)
 
   const blockedTransfer = await request('/api/transfers', {
-    method: 'POST', token: alice.data.token, body: { recipientAlias: 'bob.ion', amount: '10.00' },
+    method: 'POST', token: alice.data.token, idempotencyKey: 'flow-unverified-transfer-001', body: { recipientAlias: 'bob.ion', amount: '10.00' },
   })
   assert.equal(blockedTransfer.status, 403)
   assert.equal(blockedTransfer.data.error.code, 'KYC_REQUIRED')
@@ -231,6 +231,276 @@ test('superficie V1 conserva cuentas USDT internas y bloquea conversiones sin cr
   assert.deepEqual(afterBalances, beforeBalances)
 })
 
+test('cuenta y wallet V1 derivan estado y bloquean configuraciones no operables', async (context) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ionpay-account-wallet-v1-'))
+  const dbPath = join(directory, 'ionpay.db')
+  const { app, request } = await startApi({ dbPath })
+  context.after(async () => {
+    await app.close()
+    rmSync(directory, { recursive: true, force: true })
+  })
+
+  const user = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Wallet Foundation', phone: '+51976000001', alias: 'wallet.foundation', password: 'ClaveSegura123' },
+  })
+  assert.equal(user.status, 201)
+
+  const registrationDb = new DatabaseSync(dbPath)
+  const v1WalletRows = registrationDb.prepare(`
+    SELECT * FROM accounts
+    WHERE owner_type = 'USER' AND owner_id = ? AND currency = 'PEN' AND kind = 'AVAILABLE'
+  `).all(user.data.user.id)
+  assert.equal(v1WalletRows.length, 1)
+  assert.equal(v1WalletRows[0].balance, 0)
+  assert.throws(() => registrationDb.prepare(`
+    INSERT INTO accounts (id, owner_type, owner_id, currency, kind, balance, created_at)
+    VALUES (?, 'USER', ?, 'PEN', 'AVAILABLE', 0, ?)
+  `).run(randomUUID(), user.data.user.id, new Date().toISOString()), /UNIQUE constraint failed/)
+  registrationDb.close()
+
+  const pendingWallet = await request('/api/wallet', { token: user.data.token })
+  assert.equal(pendingWallet.status, 200)
+  assert.deepEqual(pendingWallet.data, {
+    balances: { PEN: 0 },
+    account: { status: 'pending_verification' },
+    wallet: { currency: 'PEN', status: 'active', availableBalance: 0, heldBalance: 0 },
+  })
+  assert.equal(Object.hasOwn(pendingWallet.data.balances, 'USDT'), false)
+
+  const pendingFundingKey = 'wallet-pending-fund-001'
+  const pendingFunding = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: pendingFundingKey, body: { amount: '1.00' },
+  })
+  assert.equal(pendingFunding.status, 403)
+  assert.equal(pendingFunding.data.error.code, 'KYC_REQUIRED')
+
+  await request('/api/demo/verify', { method: 'POST', token: user.data.token })
+  const activeWallet = await request('/api/wallet', { token: user.data.token })
+  assert.equal(activeWallet.status, 200)
+  assert.equal(activeWallet.data.account.status, 'active')
+  assert.equal(activeWallet.data.wallet.status, 'active')
+
+  const blockedDb = new DatabaseSync(dbPath)
+  blockedDb.prepare(`UPDATE users SET kyc_status = 'BLOCKED' WHERE id = ?`).run(user.data.user.id)
+  blockedDb.close()
+  const blockedWallet = await request('/api/wallet', { token: user.data.token })
+  assert.equal(blockedWallet.status, 200)
+  assert.equal(blockedWallet.data.account.status, 'blocked')
+  const blockedFundingKey = 'wallet-blocked-fund-001'
+  const blockedFunding = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: blockedFundingKey, body: { amount: '1.00' },
+  })
+  assert.equal(blockedFunding.status, 403)
+  assert.equal(blockedFunding.data.error.code, 'ACCOUNT_BLOCKED')
+
+  const missingDb = new DatabaseSync(dbPath)
+  missingDb.prepare(`UPDATE users SET kyc_status = 'VERIFIED' WHERE id = ?`).run(user.data.user.id)
+  missingDb.prepare(`
+    DELETE FROM accounts
+    WHERE owner_type = 'USER' AND owner_id = ? AND currency = 'PEN' AND kind = 'AVAILABLE'
+  `).run(user.data.user.id)
+  missingDb.close()
+  const missingFundingKey = 'wallet-missing-fund-001'
+  const missingFunding = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: missingFundingKey, body: { amount: '1.00' },
+  })
+  assert.equal(missingFunding.status, 409)
+  assert.equal(missingFunding.data.error.code, 'WALLET_NOT_OPERABLE')
+  const missingWallet = await request('/api/wallet', { token: user.data.token })
+  assert.equal(missingWallet.status, 409)
+  assert.equal(missingWallet.data.error.code, 'WALLET_NOT_OPERABLE')
+
+  const negativeDb = new DatabaseSync(dbPath)
+  negativeDb.prepare(`
+    INSERT INTO accounts (id, owner_type, owner_id, currency, kind, balance, created_at)
+    VALUES (?, 'USER', ?, 'PEN', 'AVAILABLE', -1, ?)
+  `).run(randomUUID(), user.data.user.id, new Date().toISOString())
+  negativeDb.close()
+  const negativeFundingKey = 'wallet-negative-fund-001'
+  const negativeFunding = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: negativeFundingKey, body: { amount: '1.00' },
+  })
+  assert.equal(negativeFunding.status, 409)
+  assert.equal(negativeFunding.data.error.code, 'WALLET_NOT_OPERABLE')
+  const negativeWallet = await request('/api/wallet', { token: user.data.token })
+  assert.equal(negativeWallet.status, 409)
+  assert.equal(negativeWallet.data.error.code, 'WALLET_NOT_OPERABLE')
+
+  const inconsistentDb = new DatabaseSync(dbPath)
+  inconsistentDb.prepare(`UPDATE accounts SET balance = 1 WHERE owner_id = ? AND currency = 'PEN'`).run(user.data.user.id)
+  inconsistentDb.close()
+  const inconsistentFundingKey = 'wallet-inconsistent-fund-001'
+  const inconsistentFunding = await request('/api/demo/fund', {
+    method: 'POST', token: user.data.token, idempotencyKey: inconsistentFundingKey, body: { amount: '1.00' },
+  })
+  assert.equal(inconsistentFunding.status, 409)
+  assert.equal(inconsistentFunding.data.error.code, 'WALLET_NOT_OPERABLE')
+  const inconsistentWallet = await request('/api/wallet', { token: user.data.token })
+  assert.equal(inconsistentWallet.status, 409)
+  assert.equal(inconsistentWallet.data.error.code, 'WALLET_NOT_OPERABLE')
+
+  const auditDb = new DatabaseSync(dbPath, { readOnly: true })
+  assert.equal(auditDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'DEMO_FUNDING'`).get().count, 0)
+  assert.equal(auditDb.prepare(`
+    SELECT COUNT(*) AS count FROM idempotency_records
+    WHERE idempotency_key IN (?, ?, ?, ?, ?)
+  `).get(pendingFundingKey, blockedFundingKey, missingFundingKey, negativeFundingKey, inconsistentFundingKey).count, 0)
+  auditDb.close()
+})
+
+test('orden de errores y guards de transfer y fondeo preservan ledger e idempotencia', async (context) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ionpay-wallet-guard-order-'))
+  const dbPath = join(directory, 'ionpay.db')
+  const { app, request } = await startApi({ dbPath })
+  context.after(async () => {
+    await app.close()
+    rmSync(directory, { recursive: true, force: true })
+  })
+
+  const sender = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Guard Sender', phone: '+51976100001', alias: 'guard.sender', password: 'ClaveSegura123' },
+  })
+  const recipient = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Guard Recipient', phone: '+51976100002', alias: 'guard.recipient', password: 'ClaveSegura123' },
+  })
+  await request('/api/demo/verify', { method: 'POST', token: sender.data.token })
+  await request('/api/demo/verify', { method: 'POST', token: recipient.data.token })
+
+  const corruptSenderDb = new DatabaseSync(dbPath)
+  corruptSenderDb.prepare(`UPDATE accounts SET balance = 1 WHERE owner_id = ? AND currency = 'PEN'`).run(sender.data.user.id)
+  corruptSenderDb.close()
+
+  const transferWithoutKey = await request('/api/transfers', {
+    method: 'POST', token: sender.data.token, body: { recipientAlias: 'guard.recipient', amount: '1.00' },
+  })
+  assert.equal(transferWithoutKey.status, 400)
+  assert.equal(transferWithoutKey.data.error.code, 'IDEMPOTENCY_KEY_REQUIRED')
+
+  const fundingWithoutKey = await request('/api/demo/fund', {
+    method: 'POST', token: sender.data.token, body: { amount: '1.00' },
+  })
+  assert.equal(fundingWithoutKey.status, 400)
+  assert.equal(fundingWithoutKey.data.error.code, 'IDEMPOTENCY_KEY_REQUIRED')
+
+  const senderGuardKey = 'guard-transfer-sender-001'
+  const invalidSender = await request('/api/transfers', {
+    method: 'POST', token: sender.data.token, idempotencyKey: senderGuardKey,
+    body: { recipientAlias: 'guard.recipient', amount: '1.00' },
+  })
+  assert.equal(invalidSender.status, 409)
+  assert.equal(invalidSender.data.error.code, 'WALLET_NOT_OPERABLE')
+
+  const corruptRecipientDb = new DatabaseSync(dbPath)
+  corruptRecipientDb.prepare(`UPDATE accounts SET balance = 0 WHERE owner_id = ? AND currency = 'PEN'`).run(sender.data.user.id)
+  corruptRecipientDb.prepare(`UPDATE accounts SET balance = 1 WHERE owner_id = ? AND currency = 'PEN'`).run(recipient.data.user.id)
+  corruptRecipientDb.close()
+
+  const recipientGuardKey = 'guard-transfer-recipient-001'
+  const invalidRecipient = await request('/api/transfers', {
+    method: 'POST', token: sender.data.token, idempotencyKey: recipientGuardKey,
+    body: { recipientAlias: 'guard.recipient', amount: '1.00' },
+  })
+  assert.equal(invalidRecipient.status, 409)
+  assert.equal(invalidRecipient.data.error.code, 'WALLET_NOT_OPERABLE')
+
+  const auditDb = new DatabaseSync(dbPath, { readOnly: true })
+  assert.equal(auditDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'TRANSFER'`).get().count, 0)
+  assert.equal(auditDb.prepare(`
+    SELECT COUNT(*) AS count FROM idempotency_records WHERE idempotency_key IN (?, ?)
+  `).get(senderGuardKey, recipientGuardKey).count, 0)
+  auditDb.close()
+})
+
+test('guards de payment request bloquean wallets irreconciliadas sin efectos financieros', async (context) => {
+  const directory = mkdtempSync(join(tmpdir(), 'ionpay-payment-wallet-guards-'))
+  const dbPath = join(directory, 'ionpay.db')
+  const { app, request } = await startApi({ dbPath })
+  context.after(async () => {
+    await app.close()
+    rmSync(directory, { recursive: true, force: true })
+  })
+
+  const requester = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Guard Requester', phone: '+51976200001', alias: 'guard.requester', password: 'ClaveSegura123' },
+  })
+  const payer = await request('/api/auth/register', {
+    method: 'POST',
+    body: { name: 'Guard Payer', phone: '+51976200002', alias: 'guard.payer', password: 'ClaveSegura123' },
+  })
+  await request('/api/demo/verify', { method: 'POST', token: requester.data.token })
+  await request('/api/demo/verify', { method: 'POST', token: payer.data.token })
+
+  const corruptRequesterDb = new DatabaseSync(dbPath)
+  corruptRequesterDb.prepare(`UPDATE accounts SET balance = 1 WHERE owner_id = ? AND currency = 'PEN'`).run(requester.data.user.id)
+  corruptRequesterDb.close()
+
+  const createGuardKey = 'guard-payment-create-requester-001'
+  const invalidCreate = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: createGuardKey,
+    body: { payerAlias: 'guard.payer', amount: '5.00', currency: 'PEN' },
+  })
+  assert.equal(invalidCreate.status, 409)
+  assert.equal(invalidCreate.data.error.code, 'WALLET_NOT_OPERABLE')
+
+  const createAuditDb = new DatabaseSync(dbPath, { readOnly: true })
+  assert.equal(createAuditDb.prepare(`SELECT COUNT(*) AS count FROM payment_requests`).get().count, 0)
+  assert.equal(createAuditDb.prepare(`SELECT COUNT(*) AS count FROM idempotency_records WHERE idempotency_key = ?`).get(createGuardKey).count, 0)
+  createAuditDb.close()
+
+  const restoreRequesterDb = new DatabaseSync(dbPath)
+  restoreRequesterDb.prepare(`UPDATE accounts SET balance = 0 WHERE owner_id = ? AND currency = 'PEN'`).run(requester.data.user.id)
+  restoreRequesterDb.close()
+
+  const created = await request('/api/payment-requests', {
+    method: 'POST', token: requester.data.token, idempotencyKey: 'guard-payment-create-valid-001',
+    body: { payerAlias: 'guard.payer', amount: '5.00', currency: 'PEN' },
+  })
+  assert.equal(created.status, 201)
+  const paymentRequestId = created.data.paymentRequest.id
+
+  const corruptPayerDb = new DatabaseSync(dbPath)
+  corruptPayerDb.prepare(`UPDATE accounts SET balance = 1 WHERE owner_id = ? AND currency = 'PEN'`).run(payer.data.user.id)
+  corruptPayerDb.close()
+  const payerGuardKey = 'guard-payment-pay-payer-001'
+  const invalidPayer = await request(`/api/payment-requests/${paymentRequestId}/pay`, {
+    method: 'POST', token: payer.data.token, idempotencyKey: payerGuardKey, body: {},
+  })
+  assert.equal(invalidPayer.status, 409)
+  assert.equal(invalidPayer.data.error.code, 'WALLET_NOT_OPERABLE')
+
+  const corruptRequesterPayDb = new DatabaseSync(dbPath)
+  corruptRequesterPayDb.prepare(`UPDATE accounts SET balance = 0 WHERE owner_id = ? AND currency = 'PEN'`).run(payer.data.user.id)
+  corruptRequesterPayDb.prepare(`UPDATE accounts SET balance = 1 WHERE owner_id = ? AND currency = 'PEN'`).run(requester.data.user.id)
+  corruptRequesterPayDb.close()
+  const requesterGuardKey = 'guard-payment-pay-requester-001'
+  const invalidRequester = await request(`/api/payment-requests/${paymentRequestId}/pay`, {
+    method: 'POST', token: payer.data.token, idempotencyKey: requesterGuardKey, body: {},
+  })
+  assert.equal(invalidRequester.status, 409)
+  assert.equal(invalidRequester.data.error.code, 'WALLET_NOT_OPERABLE')
+
+  const auditDb = new DatabaseSync(dbPath, { readOnly: true })
+  assert.equal(auditDb.prepare(`SELECT COUNT(*) AS count FROM ledger_transactions WHERE type = 'PAYMENT_REQUEST_PAYMENT'`).get().count, 0)
+  assert.equal(auditDb.prepare(`
+    SELECT COUNT(*) AS count FROM idempotency_records WHERE idempotency_key IN (?, ?, ?)
+  `).get(createGuardKey, payerGuardKey, requesterGuardKey).count, 0)
+  assert.equal(auditDb.prepare(`SELECT status FROM payment_requests WHERE id = ?`).get(paymentRequestId).status, 'PENDING')
+  auditDb.close()
+})
+
+test('SQLite configura busy_timeout sin cambiar semántica financiera', () => {
+  const db = createDatabase(':memory:')
+  try {
+    assert.equal(db.prepare('PRAGMA busy_timeout').get().timeout, 5000)
+  } finally {
+    db.close()
+  }
+})
+
 test('autenticación rechaza credenciales incorrectas y duplicados', async (context) => {
   const { app, request } = await startApi()
   context.after(() => app.close())
@@ -321,6 +591,7 @@ test('Idempotency-Key respeta los límites de 8 a 128 caracteres', async (contex
     method: 'POST',
     body: { name: 'Key Limits', phone: '+51970000004', alias: 'key.limits', password: 'ClaveSegura123' },
   })
+  await request('/api/demo/verify', { method: 'POST', token: user.data.token })
 
   const sevenCharacters = await request('/api/demo/fund', {
     method: 'POST', token: user.data.token, idempotencyKey: 'a'.repeat(7), body: { amount: '1.00' },
@@ -502,6 +773,7 @@ test('fondeo demo exige key y acredita una sola vez por payload', async (context
     method: 'POST',
     body: { name: 'Funding Idempotency', phone: '+51970000003', alias: 'funding.idem', password: 'ClaveSegura123' },
   })
+  await request('/api/demo/verify', { method: 'POST', token: user.data.token })
 
   const missingKey = await request('/api/demo/fund', {
     method: 'POST', token: user.data.token, body: { amount: '1.00' },
@@ -624,6 +896,7 @@ test('solicitudes de pago se crean sin mover saldo, son idempotentes y respetan 
   })
   assert.equal(missingCreateKey.status, 400)
   assert.equal(missingCreateKey.data.error.code, 'IDEMPOTENCY_KEY_REQUIRED')
+  await request('/api/demo/verify', { method: 'POST', token: requester.data.token })
 
   const createKey = 'payment-request-create-001'
   const first = await request('/api/payment-requests', {
@@ -731,6 +1004,7 @@ test('pago de solicitud es atómico, autorizado e idempotente ante concurrencia'
   for (const user of [requester, outsider]) {
     await request('/api/demo/verify', { method: 'POST', token: user.data.token })
   }
+  await request('/api/demo/verify', { method: 'POST', token: payer.data.token })
   await request('/api/demo/fund', {
     method: 'POST', token: payer.data.token, idempotencyKey: 'payment-pay-funding-001', body: { amount: '100.00' },
   })
@@ -740,6 +1014,10 @@ test('pago de solicitud es atómico, autorizado e idempotente ante concurrencia'
     body: { payerAlias: 'payer.pay', currency: 'PEN', amount: '25.00', note: 'Cuenta compartida' },
   })
   const paymentRequestId = created.data.paymentRequest.id
+
+  const payerStateDb = new DatabaseSync(dbPath)
+  payerStateDb.prepare(`UPDATE users SET kyc_status = 'PENDING' WHERE id = ?`).run(payer.data.user.id)
+  payerStateDb.close()
 
   const unverifiedPayer = await request(`/api/payment-requests/${paymentRequestId}/pay`, {
     method: 'POST', token: payer.data.token, idempotencyKey: 'payment-pay-unverified-001', body: {},
@@ -855,7 +1133,7 @@ test('fondos insuficientes, cancelación y expiración lazy preservan saldos y e
     method: 'POST',
     body: { name: 'Outsider States', phone: '+51973000003', alias: 'outsider.states', password: 'ClaveSegura123' },
   })
-  for (const user of [payer, outsider]) {
+  for (const user of [requester, payer, outsider]) {
     await request('/api/demo/verify', { method: 'POST', token: user.data.token })
   }
 
@@ -959,6 +1237,7 @@ test('fallos entre ledger, estado e idempotencia revierten completamente el pago
     method: 'POST',
     body: { name: 'Payer Rollback', phone: '+51974000002', alias: 'payer.rollback', password: 'ClaveSegura123' },
   })
+  await request('/api/demo/verify', { method: 'POST', token: requester.data.token })
   await request('/api/demo/verify', { method: 'POST', token: payer.data.token })
   await request('/api/demo/fund', {
     method: 'POST', token: payer.data.token, idempotencyKey: 'payment-rollback-fund-001', body: { amount: '100.00' },
@@ -1084,6 +1363,7 @@ test('pago que cruza expiración revierte ledger y persiste EXPIRED sin idempote
     method: 'POST',
     body: { name: 'Payer Expiry Pay', phone: '+51975000002', alias: 'payer.expiry.pay', password: 'ClaveSegura123' },
   })
+  await request('/api/demo/verify', { method: 'POST', token: requester.data.token })
   await request('/api/demo/verify', { method: 'POST', token: payer.data.token })
   await request('/api/demo/fund', {
     method: 'POST', token: payer.data.token, idempotencyKey: 'payment-expiry-pay-fund-001', body: { amount: '100.00' },
@@ -1151,6 +1431,7 @@ test('cancelación que cruza expiración conserva EXPIRED y no mueve saldo', asy
     method: 'POST',
     body: { name: 'Payer Expiry Cancel', phone: '+51976000002', alias: 'payer.expiry.cancel', password: 'ClaveSegura123' },
   })
+  await request('/api/demo/verify', { method: 'POST', token: requester.data.token })
   const created = await request('/api/payment-requests', {
     method: 'POST', token: requester.data.token, idempotencyKey: 'payment-expiry-cancel-create-001',
     body: { payerAlias: 'payer.expiry.cancel', amount: '25.00', currency: 'PEN' },

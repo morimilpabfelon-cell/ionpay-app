@@ -8,6 +8,7 @@ export function createDatabase(dbPath = 'data/ionpay.db') {
 
   const db = new DatabaseSync(dbPath)
   db.exec('PRAGMA foreign_keys = ON;')
+  db.exec('PRAGMA busy_timeout = 5000;')
   db.exec('PRAGMA journal_mode = WAL;')
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (

@@ -85,6 +85,13 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
   const insertUser = db.prepare('INSERT INTO users (id, name, phone, alias, password_hash, password_salt, kyc_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
   const insertAccount = db.prepare(`INSERT INTO accounts (id, owner_type, owner_id, currency, kind, balance, created_at) VALUES (?, 'USER', ?, ?, 'AVAILABLE', 0, ?)`)
   const findAccount = db.prepare(`SELECT * FROM accounts WHERE owner_type = ? AND owner_id = ? AND currency = ? AND kind = ?`)
+  const listV1WalletAccounts = db.prepare(`
+    SELECT a.*, COALESCE(SUM(e.amount), 0) AS ledger_balance
+    FROM accounts a
+    LEFT JOIN ledger_entries e ON e.account_id = a.id
+    WHERE a.owner_type = 'USER' AND a.owner_id = ? AND a.currency = 'PEN' AND a.kind = 'AVAILABLE'
+    GROUP BY a.id
+  `)
   const insertSession = db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)')
   const findSession = db.prepare(`SELECT users.* FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token_hash = ? AND sessions.expires_at > ?`)
   const findIdempotencyRecord = db.prepare('SELECT * FROM idempotency_records WHERE owner_id = ? AND idempotency_key = ?')
@@ -153,13 +160,69 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
     return user
   }
 
-  function requireVerified(user) {
-    if (user.kyc_status !== 'VERIFIED') throw new ApiError(403, 'KYC_REQUIRED', 'Completa la verificación de identidad para operar.')
+  function accountStatusFor(user) {
+    if (user?.kyc_status === 'VERIFIED') return 'active'
+    if (user?.kyc_status === 'PENDING') return 'pending_verification'
+    if (user?.kyc_status === 'BLOCKED') return 'blocked'
+    return 'error'
+  }
+
+  function walletStatusFor(userId) {
+    const rows = listV1WalletAccounts.all(userId)
+    if (rows.length === 0) return { status: 'missing', account: null }
+    if (rows.length !== 1) return { status: 'invalid', account: null }
+    const [account] = rows
+    if (
+      !Number.isSafeInteger(account.balance)
+      || account.balance < 0
+      || !Number.isSafeInteger(account.ledger_balance)
+      || account.balance !== account.ledger_balance
+    ) {
+      return { status: 'invalid', account: null }
+    }
+    return { status: 'active', account }
+  }
+
+  function assertWalletOperable(userId) {
+    const wallet = walletStatusFor(userId)
+    if (wallet.status !== 'active') {
+      throw new ApiError(409, 'WALLET_NOT_OPERABLE', 'La wallet PEN no está disponible para operar.')
+    }
+    return wallet.account
+  }
+
+  function assertAccountWalletOperable(user) {
+    const accountStatus = accountStatusFor(user)
+    if (accountStatus === 'pending_verification') {
+      throw new ApiError(403, 'KYC_REQUIRED', 'Completa la verificación de identidad para operar.')
+    }
+    if (accountStatus === 'blocked') {
+      throw new ApiError(403, 'ACCOUNT_BLOCKED', 'La cuenta está bloqueada y no puede operar.')
+    }
+    if (accountStatus !== 'active') {
+      throw new ApiError(409, 'ACCOUNT_NOT_OPERABLE', 'La cuenta no está disponible para operar.')
+    }
+    return assertWalletOperable(user.id)
   }
 
   function walletFor(userId) {
-    const rows = db.prepare(`SELECT currency, balance FROM accounts WHERE owner_type = 'USER' AND owner_id = ? AND currency = 'PEN' AND kind = 'AVAILABLE'`).all(userId)
-    return Object.fromEntries(rows.map((row) => [row.currency, row.balance / 100]))
+    const account = assertWalletOperable(userId)
+    return { PEN: account.balance / 100 }
+  }
+
+  function publicWallet(user) {
+    const account = assertWalletOperable(user.id)
+    const availableBalance = account.balance / 100
+    return {
+      balances: { PEN: availableBalance },
+      account: { status: accountStatusFor(user) },
+      wallet: {
+        currency: 'PEN',
+        status: 'active',
+        availableBalance,
+        heldBalance: 0,
+      },
+    }
   }
 
   function publicPaymentRequest(row) {
@@ -303,7 +366,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
 
       if (request.method === 'GET' && url.pathname === '/api/wallet') {
         const user = authenticate(request)
-        return send(response, 200, { balances: walletFor(user.id) })
+        return send(response, 200, publicWallet(user))
       }
 
       if (request.method === 'GET' && url.pathname === '/api/activity') {
@@ -347,6 +410,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
             const payer = findUserByAlias.get(payerAlias)
             if (!payer) throw new ApiError(404, 'PAYER_NOT_FOUND', 'No encontramos al pagador.')
             if (payer.id === user.id) throw new ApiError(400, 'SAME_ACCOUNT', 'No puedes solicitarte un pago a ti mismo.')
+            assertAccountWalletOperable(findUserById.get(user.id))
             const id = randomUUID()
             const createdAt = now().toISOString()
             const expiresAt = new Date(Date.parse(createdAt) + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
@@ -409,11 +473,11 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
             if (paymentRequest.payer_user_id !== user.id) {
               throw new ApiError(403, 'PAYMENT_REQUEST_FORBIDDEN', 'Solo el pagador asignado puede pagar esta solicitud.')
             }
-            requireVerified(user)
+            const currentPayer = findUserById.get(user.id)
+            const payerAccount = assertAccountWalletOperable(currentPayer)
             assertPaymentRequestPending(paymentRequest)
 
-            const payerAccount = findAccount.get('USER', user.id, 'PEN', 'AVAILABLE')
-            const requesterAccount = findAccount.get('USER', paymentRequest.requester_user_id, 'PEN', 'AVAILABLE')
+            const requesterAccount = assertWalletOperable(paymentRequest.requester_user_id)
             const metadata = JSON.parse(paymentRequest.metadata_json)
             db.exec('SAVEPOINT payment_request_payment')
             const transaction = ledger.postWithinTransaction({
@@ -495,7 +559,6 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
 
       if (request.method === 'POST' && url.pathname === '/api/transfers') {
         const user = authenticate(request)
-        requireVerified(user)
         const idempotencyKey = requireIdempotencyKey(request)
         const body = await readBody(request)
         const recipientAlias = requiredText(body.recipientAlias, 'Destinatario', 3).toLowerCase().replace(/^@/, '')
@@ -510,8 +573,8 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
             const recipient = findUserByAlias.get(recipientAlias)
             if (!recipient) throw new ApiError(404, 'RECIPIENT_NOT_FOUND', 'No encontramos al destinatario.')
             if (recipient.id === user.id) throw new ApiError(400, 'SAME_ACCOUNT', 'No puedes enviarte dinero a ti mismo.')
-            const senderAccount = findAccount.get('USER', user.id, 'PEN', 'AVAILABLE')
-            const recipientAccount = findAccount.get('USER', recipient.id, 'PEN', 'AVAILABLE')
+            const senderAccount = assertAccountWalletOperable(findUserById.get(user.id))
+            const recipientAccount = assertWalletOperable(recipient.id)
             const transaction = ledger.postWithinTransaction({ type: 'TRANSFER', reference: reference(), entries: [{ accountId: senderAccount.id, currency: 'PEN', amount: -amount }, { accountId: recipientAccount.id, currency: 'PEN', amount }], metadata: { senderAlias: user.alias, recipientAlias: recipient.alias, note } })
             return { status: 201, data: { transaction, balances: walletFor(user.id) }, transactionId: transaction.id }
           },
@@ -522,7 +585,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
       if (request.method === 'POST' && url.pathname === '/api/conversions') {
         const user = authenticate(request)
         if (!CONVERSIONS_AVAILABLE_IN_V1) throw new ApiError(409, 'FEATURE_NOT_AVAILABLE', 'La conversión no está disponible en esta versión.')
-        requireVerified(user)
+        assertAccountWalletOperable(user)
         const body = await readBody(request)
         const from = body.fromCurrency
         if (!['PEN', 'USDT'].includes(from)) throw new ApiError(400, 'INVALID_CURRENCY', 'La moneda de origen no es válida.')
@@ -558,7 +621,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
           payload: { amount },
           operation: () => {
             const treasury = findAccount.get('SYSTEM', 'IONPAY', 'PEN', 'TREASURY')
-            const userAccount = findAccount.get('USER', user.id, 'PEN', 'AVAILABLE')
+            const userAccount = assertAccountWalletOperable(findUserById.get(user.id))
             const transaction = ledger.postWithinTransaction({ type: 'DEMO_FUNDING', reference: reference(), entries: [{ accountId: treasury.id, currency: 'PEN', amount: -amount }, { accountId: userAccount.id, currency: 'PEN', amount }], metadata: { demo: true } })
             return { status: 201, data: { transaction, balances: walletFor(user.id) }, transactionId: transaction.id }
           },
