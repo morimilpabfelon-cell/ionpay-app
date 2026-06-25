@@ -17,24 +17,25 @@ interface ServicesPageProps {
 }
 
 const sectionHelpStyle = {
-  margin: '6px 0 0',
+  margin: '4px 0 0',
   color: '#7b8783',
-  fontSize: '11px',
-  lineHeight: 1.45,
-  maxWidth: 420,
+  fontSize: '10px',
+  lineHeight: 1.35,
+  maxWidth: 390,
 } as const
 
 const requestNoticeStyle = {
-  display: 'grid',
-  gap: 3,
-  margin: '0 0 12px 0',
-  padding: '10px 12px',
-  borderRadius: 14,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  margin: '0 0 8px 0',
+  padding: '7px 9px',
+  borderRadius: 12,
   background: '#f7faf8',
   border: '1px solid #e1e9e5',
   color: '#61706c',
-  fontSize: '10px',
-  lineHeight: 1.45,
+  fontSize: '9.5px',
+  lineHeight: 1.35,
 } as const
 
 function money(amount: number) {
@@ -49,22 +50,20 @@ function statusLabel(status: PaymentRequest['status']) {
 }
 
 function statusDescription(status: PaymentRequest['status']) {
-  if (status === 'PENDING') return 'Solicitud pendiente: todavía no es pago confirmado. El QR local solo identifica la solicitud; no paga ni confirma cobro.'
-  if (status === 'PAID') return 'Solicitud pagada: considera el cobro confirmado solo si también aparece en Actividad con su registro/receipt interno.'
-  if (status === 'CANCELLED') return 'Solicitud cancelada: ya no es pagable y no debe usarse como prueba de cobro.'
-  return 'Solicitud expirada: ya no es pagable y no debe usarse como prueba de cobro.'
+  if (status === 'PENDING') return 'No es pago confirmado. QR local informativo.'
+  if (status === 'PAID') return 'Confirmar solo en Activity/receipt.'
+  if (status === 'CANCELLED') return 'No pagable.'
+  return 'No pagable.'
 }
 
 function roleDescription(kind: 'received' | 'created') {
-  return kind === 'received'
-    ? 'Recibida: otra persona te solicitó pagar PEN.'
-    : 'Creada: tú solicitaste recibir PEN de otra persona.'
+  return kind === 'received' ? 'Te solicitaron pagar' : 'Tú solicitaste cobrar'
 }
 
 function RequestRow({ request, kind, processing, disabled, onPay, onCancel }: { request: PaymentRequest; kind: 'received' | 'created'; processing: boolean; disabled: boolean; onPay: (id: string) => void; onCancel: (id: string) => void }) {
   const isPending = request.status === 'PENDING'
   const alias = kind === 'received' ? request.requesterAlias : request.payerAlias
-  const detail = kind === 'received' ? 'Solicitud recibida' : 'Solicitud creada'
+  const detail = roleDescription(kind)
   const readableStatus = statusLabel(request.status)
   const description = statusDescription(request.status)
 
@@ -72,14 +71,14 @@ function RequestRow({ request, kind, processing, disabled, onPay, onCancel }: { 
     <div className="request-with-qr">
       <div className="transaction-row">
         <span className={`transaction-icon ${kind === 'received' ? 'outgoing' : 'incoming'}`}><PayIcon /></span>
-        <span className="transaction-main"><strong>@{alias}</strong><small>{detail} · {request.note || request.reference}</small><small>{roleDescription(kind)}</small></span>
+        <span className="transaction-main"><strong>@{alias}</strong><small>{detail} · {request.note || request.reference}</small></span>
         <span className={`transaction-amount ${kind === 'received' ? 'out' : 'in'}`}><strong>{money(request.amount)}</strong><small>{readableStatus}</small></span>
         {kind === 'received' && isPending && <button className="secondary-button" type="button" disabled={disabled} onClick={() => onPay(request.id)}>{processing ? 'Pagando...' : 'Pagar'}</button>}
         {kind === 'created' && isPending && <button className="secondary-button" type="button" disabled={disabled} onClick={() => onCancel(request.id)}>{processing ? 'Cancelando...' : 'Cancelar'}</button>}
       </div>
       <div style={requestNoticeStyle}>
         <strong>{readableStatus}</strong>
-        <span>{description} Receipt/proof pertenece a Actividad confirmada, no a una request pendiente.</span>
+        <span>{description}</span>
       </div>
       {isPending && <PaymentRequestQr request={request} identifier={`@${alias}`} statusText={readableStatus} />}
     </div>
@@ -98,32 +97,32 @@ export default function ServicesPage({ state, paymentRequests, openAction, onPay
       <div className="page-heading">
         <span className="eyebrow">ionPAY V1</span>
         <h1>Cobros</h1>
-        <p>Superficie V1 limitada a PEN. Las solicitudes ordenan cobros, pero solo Actividad confirma operaciones y muestra registro/receipt interno.</p>
+        <p>Requests ordenan cobros; solo Activity confirma operaciones y muestra receipt interno.</p>
       </div>
 
       <section className="service-group">
         <div className="service-group-title"><h2>Funciones de cobro V1</h2><span>3 módulos</span></div>
         <div className="services-grid">
-          <button className="service-card" onClick={() => openAction('receive')}><span className="service-icon green"><QrIcon /></span><span className="service-copy"><strong>Crear solicitud de pago</strong><small>Solicita PEN; no confirma cobro por sí sola</small></span><span className="service-arrow">›</span></button>
-          <button className="service-card" onClick={() => setMerchantActive(!merchantActive)}><span className="service-icon teal"><StoreIcon /></span><span className="service-copy"><strong>Modo comercio básico</strong><small>{merchantActive ? 'Activo para revisión V1 local' : 'Revisar cobros sin POS real'}</small></span><span className="service-arrow">›</span></button>
-          <button className="service-card" disabled><span className="service-icon blue"><ActivityIcon /></span><span className="service-copy"><strong>Actividad y receipts</strong><small>Solo tras confirmación backend/activity</small></span><span className="service-arrow">›</span></button>
+          <button className="service-card" onClick={() => openAction('receive')}><span className="service-icon green"><QrIcon /></span><span className="service-copy"><strong>Crear solicitud de pago</strong><small>Solicita PEN; no confirma cobro</small></span><span className="service-arrow">›</span></button>
+          <button className="service-card" onClick={() => setMerchantActive(!merchantActive)}><span className="service-icon teal"><StoreIcon /></span><span className="service-copy"><strong>Modo comercio básico</strong><small>{merchantActive ? 'Revisión local activa' : 'Sin POS real'}</small></span><span className="service-arrow">›</span></button>
+          <button className="service-card" disabled><span className="service-icon blue"><ActivityIcon /></span><span className="service-copy"><strong>Activity y receipts</strong><small>Solo tras confirmación</small></span><span className="service-arrow">›</span></button>
         </div>
       </section>
 
       <section className="section-card full-list" style={{ marginBottom: 18 }}>
-        <div className="section-title" style={{ padding: '18px 18px 0' }}><div><span className="eyebrow">Solicitudes recibidas</span><h2>Por pagar</h2><p style={sectionHelpStyle}>Aquí aparecen solicitudes pendientes que otra persona te envió. Pendiente no significa pagado; el receipt aparece solo desde Actividad confirmada.</p></div><PayIcon /></div>
-        {pendingReceived.length ? pendingReceived.map((request) => <RequestRow key={request.id} request={request} kind="received" processing={processingRequestId === request.id} disabled={requestOperationPending} onPay={(id) => void onPayRequest(id)} onCancel={(id) => void onCancelRequest(id)} />) : <div className="empty-state"><CheckIcon /><strong>No tienes solicitudes pendientes</strong><span>No hay requests recibidas por pagar. Si una operación se confirmó, revisa Actividad para ver registro/receipt interno.</span></div>}
+        <div className="section-title" style={{ padding: '16px 16px 0' }}><div><span className="eyebrow">Solicitudes recibidas</span><h2>Por pagar</h2><p style={sectionHelpStyle}>Pendiente no es pagado. Receipt solo aparece en Activity confirmada.</p></div><PayIcon /></div>
+        {pendingReceived.length ? pendingReceived.map((request) => <RequestRow key={request.id} request={request} kind="received" processing={processingRequestId === request.id} disabled={requestOperationPending} onPay={(id) => void onPayRequest(id)} onCancel={(id) => void onCancelRequest(id)} />) : <div className="empty-state"><CheckIcon /><strong>No tienes solicitudes pendientes</strong><span>Si una operación se confirmó, revisa Activity para ver receipt interno.</span></div>}
       </section>
 
       <section className="section-card full-list" style={{ marginBottom: 18 }}>
-        <div className="section-title" style={{ padding: '18px 18px 0' }}><div><span className="eyebrow">Solicitudes creadas</span><h2>Cobros solicitados</h2><p style={sectionHelpStyle}>Estas son requests que tú creaste para cobrar PEN. Estados pagada/cancelada/expirada no son pagables; usa Actividad para confirmar operaciones reales.</p></div><QrIcon /></div>
-        {visibleCreated.length ? visibleCreated.map((request) => <RequestRow key={request.id} request={request} kind="created" processing={processingRequestId === request.id} disabled={requestOperationPending} onPay={(id) => void onPayRequest(id)} onCancel={(id) => void onCancelRequest(id)} />) : <div className="empty-state"><QrIcon /><strong>No creaste solicitudes visibles</strong><span>Crea una solicitud para pedir un pago en PEN. La solicitud y su QR local no son comprobante de cobro.</span></div>}
+        <div className="section-title" style={{ padding: '16px 16px 0' }}><div><span className="eyebrow">Solicitudes creadas</span><h2>Cobros solicitados</h2><p style={sectionHelpStyle}>Pagada se valida en Activity. Cancelada/expirada no es pagable.</p></div><QrIcon /></div>
+        {visibleCreated.length ? visibleCreated.map((request) => <RequestRow key={request.id} request={request} kind="created" processing={processingRequestId === request.id} disabled={requestOperationPending} onPay={(id) => void onPayRequest(id)} onCancel={(id) => void onCancelRequest(id)} />) : <div className="empty-state"><QrIcon /><strong>No creaste solicitudes visibles</strong><span>La solicitud y su QR local no son comprobante de cobro.</span></div>}
       </section>
 
       {merchantActive && (
         <section className="section-card account-status">
           <div className="section-title compact"><div><span className="eyebrow">Comercio básico local</span><h2>Solo revisión de cobros recibidos</h2></div><CheckIcon /></div>
-          <div className="merchant-stats"><div><span>Cobros recibidos confirmados en actividad</span><strong>{money(totalReceived)}</strong></div><div><span>Operaciones</span><strong>{received.length}</strong></div></div>
+          <div className="merchant-stats"><div><span>Cobros confirmados en Activity</span><strong>{money(totalReceived)}</strong></div><div><span>Operaciones</span><strong>{received.length}</strong></div></div>
           <button className="secondary-button" onClick={() => setMerchantActive(false)}>Desactivar modo comercio</button>
         </section>
       )}
