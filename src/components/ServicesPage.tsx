@@ -42,7 +42,7 @@ function RequestRow({ request, kind, processing, disabled, onPay, onCancel }: { 
         {kind === 'received' && isPending && <button className="secondary-button" type="button" disabled={disabled} onClick={() => onPay(request.id)}>{processing ? 'Pagando...' : 'Pagar'}</button>}
         {kind === 'created' && isPending && <button className="secondary-button" type="button" disabled={disabled} onClick={() => onCancel(request.id)}>{processing ? 'Cancelando...' : 'Cancelar'}</button>}
       </div>
-      <PaymentRequestQr request={request} identifier={`@${alias}`} statusText={readableStatus} />
+      {isPending && <PaymentRequestQr request={request} identifier={`@${alias}`} statusText={readableStatus} />}
     </div>
   )
 }
