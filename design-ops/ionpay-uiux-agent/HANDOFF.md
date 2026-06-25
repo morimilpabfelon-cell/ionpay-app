@@ -36,8 +36,34 @@ This folder contains:
 - component specifications;
 - local Figma plugin MVP;
 - static responsive prototype;
+- external UI UX Pro Max adapter;
+- ionPAY fintech profile based on UI UX Pro Max;
 - starter core pack;
 - starter ASCII pack.
+
+## External design reference now incorporated
+
+The founder provided:
+
+```text
+https://github.com/nextlevelbuilder/ui-ux-pro-max-skill
+```
+
+This has been incorporated as a controlled reference layer under:
+
+```text
+design-ops/ionpay-uiux-agent/external-skills/
+```
+
+Added files:
+
+- `UI_UX_PRO_MAX_ADAPTER.md`
+- `IONPAY_UUPM_PROFILE.md`
+- `UUPM_TO_IONPAY_MAPPING.md`
+
+The external project is used as a reference for design reasoning, fintech style selection, accessibility, responsive behavior and implementation handoff discipline.
+
+It is not installed as a runtime app dependency.
 
 ## Why this exists
 
@@ -128,7 +154,7 @@ Other agents must not change design packs, generate design direction or run visu
 
 - Financial risk: low while kept as design tooling.
 - Product risk: medium if mistaken as implementation authorization.
-- Mitigation: folder isolation, policy file, design scope document, implementation bridge and PR draft classification.
+- Mitigation: folder isolation, policy file, design scope document, implementation bridge, external skill adapter and PR draft classification.
 
 ## Required gates before app implementation
 
@@ -148,4 +174,5 @@ Generated screens, tokens, component specs and coded prototypes require normal g
 3. Expand packs to the 20+ module target in `DESIGN_SYSTEM_SCOPE.md`.
 4. Add design notes per module: phone, tablet, risk, false-success prevention.
 5. Expand the static prototype into multiple module prototypes.
-6. Keep the PR draft until the founder confirms the operation center structure.
+6. Use the UUPM ionPAY profile when selecting styles, tokens, responsive rules and component specs.
+7. Keep the PR draft until the founder confirms the operation center structure.
