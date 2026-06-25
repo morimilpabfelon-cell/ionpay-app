@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ionPAY P0 Payment Flow Prototype</title>
+    <style>
+      :root {
+        --bg: #f4f6f0;
+        --surface: #ffffff;
+        --surface-muted: #eef1ea;
+        --ink: #0a0a0b;
+        --muted: #747a76;
+        --line: #dce0d8;
+        --lime: #b6ff14;
+        --success: #14b86a;
+        --warning: #e9a400;
+        --danger: #dc2f45;
+        --terminal-bg: #0c0e0f;
+        --terminal-ink: #b6ff14;
+        --radius: 24px;
+        --font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); }
+      .page { padding: 24px; display: grid; gap: 24px; }
+      .header { max-width: 1100px; width: 100%; margin: 0 auto; }
+      .header h1 { margin: 0; font-size: 28px; letter-spacing: -0.04em; }
+      .header p { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+      .flow { max-width: 1100px; width: 100%; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+      .screen { background: var(--surface); border: 1px solid var(--line); border-radius: 28px; padding: 20px; min-height: 520px; display: grid; align-content: start; gap: 16px; }
+      .screen h2 { margin: 0; font-size: 22px; letter-spacing: -0.03em; }
+      .screen .sub { margin: -8px 0 0; color: var(--muted); font-size: 12px; }
+      .balance { background: var(--ink); color: white; border-radius: var(--radius); padding: 20px; min-height: 140px; display: grid; align-content: space-between; }
+      .balance .label, .meta { font-size: 12px; color: var(--muted); }
+      .balance .amount { font-size: 32px; font-weight: 900; letter-spacing: -0.06em; }
+      .balance .proof { color: var(--lime); font-size: 12px; }
+      .row { border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: flex; justify-content: space-between; gap: 12px; align-items: center; background: var(--surface); }
+      .row span { font-size: 13px; color: var(--muted); }
+      .row strong { font-size: 13px; }
+      .amount-input { border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; background: var(--surface-muted); }
+      .amount-input .value { font-size: 36px; font-weight: 900; letter-spacing: -0.06em; }
+      .button { border: 0; border-radius: 16px; background: var(--ink); color: white; padding: 14px 16px; font-weight: 900; width: 100%; }
+      .button.secondary { background: var(--surface-muted); color: var(--ink); border: 1px solid var(--line); }
+      .status { border-radius: 16px; padding: 14px; font-size: 13px; font-weight: 800; }
+      .status.pending { background: #fff6d8; color: #6f4e00; }
+      .status.confirmed { background: #e5f8ee; color: #0a6b3c; }
+      .status.failed { background: #ffe8ec; color: #97182a; }
+      .terminal { background: var(--terminal-bg); color: var(--terminal-ink); border-radius: 0; padding: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; line-height: 1.7; overflow: auto; }
+      .warning { color: var(--muted); font-size: 11px; line-height: 1.4; }
+      @media (min-width: 900px) {
+        .screen.featured { grid-column: span 2; grid-template-columns: 1fr 1fr; }
+        .screen.featured h2, .screen.featured .sub, .screen.featured .warning { grid-column: 1 / -1; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="header">
+        <h1>ionPAY P0 Payment Flow</h1>
+        <p>Design-only prototype. It defines visual flow and state language. It does not execute payments or show real balances.</p>
+      </header>
+
+      <section class="flow" aria-label="Payment flow screens">
+        <article class="screen">
+          <h2>1. Home Wallet</h2>
+          <p class="sub">Balance must come from backend truth.</p>
+          <div class="balance">
+            <div class="label">Saldo disponible</div>
+            <div class="amount">S/ 2,840.60</div>
+            <div class="proof">PEN wallet · backend-confirmed required</div>
+          </div>
+          <div class="row"><strong>Pagar</strong><span>Primary</span></div>
+          <div class="row"><strong>Cobrar</strong><span>QR</span></div>
+          <div class="row"><strong>Historial</strong><span>Proof</span></div>
+          <button class="button">Pagar</button>
+        </article>
+
+        <article class="screen">
+          <h2>2. Amount</h2>
+          <p class="sub">Entering amount does not move money.</p>
+          <div class="amount-input">
+            <div class="meta">Monto a enviar</div>
+            <div class="value">S/ 18.50</div>
+          </div>
+          <div class="row"><strong>Destino</strong><span>Wallet PEN</span></div>
+          <div class="row"><strong>Límite</strong><span>Disponible</span></div>
+          <div class="status pending">Aún no se ejecuta ningún pago.</div>
+          <button class="button">Continuar a revisión</button>
+        </article>
+
+        <article class="screen featured">
+          <h2>3. Confirmation</h2>
+          <p class="sub">Confirmation is not success. It is the final review before submit.</p>
+          <div>
+            <div class="row"><strong>Enviar</strong><span>S/ 18.50</span></div>
+            <div class="row"><strong>Para</strong><span>Comercio / contacto</span></div>
+            <div class="row"><strong>Origen</strong><span>Wallet PEN</span></div>
+            <div class="row"><strong>Estado</strong><span>Esperando confirmación</span></div>
+          </div>
+          <div>
+            <div class="status pending">Revisa antes de confirmar. Esta pantalla no prueba que el pago se completó.</div>
+            <button class="button">Confirmar pago</button>
+            <button class="button secondary">Cancelar</button>
+          </div>
+          <p class="warning">Production implementation requires backend binding and Financial Safety review.</p>
+        </article>
+
+        <article class="screen">
+          <h2>4A. Pending</h2>
+          <p class="sub">No false-success while waiting.</p>
+          <div class="status pending">Procesando. No cierres esta pantalla.</div>
+          <div class="row"><strong>Trace</strong><span>Creándose</span></div>
+          <div class="row"><strong>Receipt</strong><span>No disponible todavía</span></div>
+          <button class="button secondary">Actualizar estado</button>
+        </article>
+
+        <article class="screen">
+          <h2>4B. Confirmed</h2>
+          <p class="sub">Only after backend confirms.</p>
+          <div class="status confirmed">Confirmado por ionPAY.</div>
+          <div class="row"><strong>Monto</strong><span>S/ 18.50</span></div>
+          <div class="row"><strong>Trace ID</strong><span>ION-DESIGN-01850</span></div>
+          <button class="button">Ver comprobante</button>
+        </article>
+
+        <article class="screen">
+          <h2>4C. Failed</h2>
+          <p class="sub">Failure must give recovery path.</p>
+          <div class="status failed">No se pudo completar el pago.</div>
+          <div class="row"><strong>Motivo</strong><span>Backend unavailable</span></div>
+          <div class="row"><strong>Saldo</strong><span>No actualizado</span></div>
+          <button class="button secondary">Intentar de nuevo</button>
+        </article>
+
+        <article class="screen featured">
+          <h2>5. Receipt / Proof</h2>
+          <p class="sub">Receipt appears only after confirmed completion.</p>
+          <div>
+            <div class="row"><strong>Estado</strong><span>Confirmado</span></div>
+            <div class="row"><strong>Monto</strong><span>S/ 18.50</span></div>
+            <div class="row"><strong>Trace ID</strong><span>ION-DESIGN-01850</span></div>
+            <div class="row"><strong>Fecha</strong><span>Design timestamp</span></div>
+          </div>
+          <pre class="terminal">+------------------------------+
+| IONPAY RECEIPT PROOF         |
++------------------------------+
+STATE=CONFIRMED_BY_BACKEND
+AMOUNT=S/ 18.50
+TRACE=ION-DESIGN-01850
+FALSE_SUCCESS=BLOCKED
+RECEIPT=AVAILABLE</pre>
+          <p class="warning">This is a design prototype. Production receipt requires backend-confirmed transaction data.</p>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
