@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { IonState, PaymentRequest } from '../types'
 import { ActivityIcon, CheckIcon, PayIcon, QrIcon, StoreIcon } from './Icons'
+import PaymentRequestQr from './PaymentRequestQr'
 
 interface ServicesPageProps {
   state: IonState
@@ -30,14 +31,18 @@ function RequestRow({ request, kind, processing, disabled, onPay, onCancel }: { 
   const isPending = request.status === 'PENDING'
   const alias = kind === 'received' ? request.requesterAlias : request.payerAlias
   const detail = kind === 'received' ? 'Solicitud recibida' : 'Solicitud creada'
+  const readableStatus = statusLabel(request.status)
 
   return (
-    <div className="transaction-row">
-      <span className={`transaction-icon ${kind === 'received' ? 'outgoing' : 'incoming'}`}><PayIcon /></span>
-      <span className="transaction-main"><strong>@{alias}</strong><small>{detail} · {request.note || request.reference}</small></span>
-      <span className={`transaction-amount ${kind === 'received' ? 'out' : 'in'}`}><strong>{money(request.amount)}</strong><small>{statusLabel(request.status)}</small></span>
-      {kind === 'received' && isPending && <button className="secondary-button" type="button" disabled={disabled} onClick={() => onPay(request.id)}>{processing ? 'Pagando...' : 'Pagar'}</button>}
-      {kind === 'created' && isPending && <button className="secondary-button" type="button" disabled={disabled} onClick={() => onCancel(request.id)}>{processing ? 'Cancelando...' : 'Cancelar'}</button>}
+    <div className="request-with-qr">
+      <div className="transaction-row">
+        <span className={`transaction-icon ${kind === 'received' ? 'outgoing' : 'incoming'}`}><PayIcon /></span>
+        <span className="transaction-main"><strong>@{alias}</strong><small>{detail} · {request.note || request.reference}</small></span>
+        <span className={`transaction-amount ${kind === 'received' ? 'out' : 'in'}`}><strong>{money(request.amount)}</strong><small>{readableStatus}</small></span>
+        {kind === 'received' && isPending && <button className="secondary-button" type="button" disabled={disabled} onClick={() => onPay(request.id)}>{processing ? 'Pagando...' : 'Pagar'}</button>}
+        {kind === 'created' && isPending && <button className="secondary-button" type="button" disabled={disabled} onClick={() => onCancel(request.id)}>{processing ? 'Cancelando...' : 'Cancelar'}</button>}
+      </div>
+      <PaymentRequestQr request={request} identifier={`@${alias}`} statusText={readableStatus} />
     </div>
   )
 }
