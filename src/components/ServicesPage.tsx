@@ -75,10 +75,9 @@ function primaryActionLabel(request: PaymentRequest, kind: RequestKind, processi
 export default function ServicesPage({ state, paymentRequests, openAction, onPayRequest, onCancelRequest, processingRequestId, requestOperationPending }: ServicesPageProps) {
   const [activeTab, setActiveTab] = useState<RequestTab>('received')
   const [selected, setSelected] = useState<SelectedRequest | null>(null)
-  const allRequests = [...paymentRequests.received, ...paymentRequests.created]
   const pendingReceived = paymentRequests.received.filter((request) => request.status === 'PENDING').length
   const pendingCreated = paymentRequests.created.filter((request) => request.status === 'PENDING').length
-  const paidCount = allRequests.filter((request) => request.status === 'PAID').length
+  const activityCount = state.transactions.filter((transaction) => transaction.currency === 'PEN' && transaction.kind !== 'conversion').length
   const activeRequests = activeTab === 'received' ? paymentRequests.received : paymentRequests.created
   const selectedAlias = selected ? requestContact(selected.request, selected.kind) : ''
   const selectedStatus = selected ? statusLabel(selected.request.status) : ''
@@ -107,7 +106,7 @@ export default function ServicesPage({ state, paymentRequests, openAction, onPay
       <section className="requests-summary-card" aria-label="Resumen de solicitudes">
         <div><span>Por pagar</span><strong>{pendingReceived}</strong></div>
         <div><span>Enviadas</span><strong>{pendingCreated}</strong></div>
-        <div><span>Activity</span><strong>{paidCount}</strong></div>
+        <div><span>Activity</span><strong>{activityCount}</strong></div>
       </section>
 
       <div className="requests-segment" role="tablist" aria-label="Tipo de solicitudes">
@@ -126,7 +125,7 @@ export default function ServicesPage({ state, paymentRequests, openAction, onPay
           const readableStatus = statusLabel(request.status)
           const processing = processingRequestId === request.id
           const canCancel = request.status === 'PENDING' && kind === 'created'
-          const hasSecondaryDetail = request.status === 'PENDING' && kind === 'received' || request.status === 'PAID'
+          const hasSecondaryDetail = (request.status === 'PENDING' && kind === 'received') || request.status === 'PAID'
 
           return (
             <article className={`request-compact-card ${statusTone(request.status)}`} key={request.id}>
