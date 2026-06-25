@@ -2,23 +2,26 @@
 
 ## Objetivo
 
-IONPAY es una billetera financiera Android-first que conecta pagos cotidianos, liquidez e inversión dentro del ecosistema Ion. La experiencia debe ser simple para el usuario aunque la infraestructura interna sea rigurosa.
+IONPAY es una billetera financiera Android-first del ecosistema Ion. Debe construirse por fases: primero núcleo seguro, después integración de flujos, luego validación móvil y producción solo al final.
 
-La regla central del proyecto es construir por fases. No se debe intentar desarrollar wallet, pagos, QR, merchant, Android, iOS, exchange, tarjetas y productos financieros al mismo tiempo. Primero se consolida el núcleo seguro; después se integran flujos; después se empaqueta móvil; producción queda al final.
+Regla central: no construir wallet, pagos, QR, comercio, Android, iOS, exchange, tarjetas y productos financieros al mismo tiempo.
 
-## Regla institucional de ejecución
+## Reglas institucionales
 
-- Un agente no debe trabajar desde cero ni inventar dirección.
-- Antes de proponer o ejecutar cambios, revisar el estado operativo más reciente en Notion y este archivo.
+- Ningún agente trabaja desde cero ni inventa dirección.
+- Antes de ejecutar, consultar estado operativo vigente, `AGENTS.md`, `README.md`, GitHub y Notion cuando aplique.
 - Toda tarea debe tener fase, alcance, prioridad, riesgo, gate y condición de salida.
-- Toda tarea grande debe dividirse en subfases pequeñas.
 - Codex no decide producto, no aprueba seguridad financiera y no revisa su propio trabajo.
-- No hacer merge sin autorización humana explícita.
-- No conectar producción ni dinero real sin decisión explícita del fundador y revisión financiera.
+- Operating Executor coordina; no aprueba seguridad financiera.
+- Software Engineer audita y prepara instrucciones; no autoriza merge por sí solo.
+- Financial Safety Reviewer revisa wallet, saldo, transferencias, cobros, idempotency y estados financieros.
+- Frontend Surface Reviewer revisa UI, errores, claridad y riesgo de falso éxito.
+- Founder approval es obligatorio antes de merge final o release.
+- Si un PR financiero se mergea sin evidencia visible completa, el estado pasa a HOLD hasta cerrar post-merge validation.
 
 ## Memoria operativa obligatoria
 
-Antes de iniciar cualquier tarea, el agente activo debe consultar o reconstruir el estado operativo vigente desde estas fuentes, en este orden:
+Antes de iniciar cualquier tarea, consultar o reconstruir:
 
 1. ionPAY Agent Operating System / Orchestrator.
 2. 01_Project State.
@@ -28,25 +31,74 @@ Antes de iniciar cualquier tarea, el agente activo debe consultar o reconstruir 
 6. Último Handoff relevante.
 7. `AGENTS.md`.
 8. `README.md`.
-9. GitHub, si la tarea afecta código, issues, PRs, branches o validación.
-10. Notion, si la tarea afecta producto, alcance, gates, roadmap o estado operativo.
+9. GitHub si afecta código, issues, PRs, branches o validación.
+10. Notion si afecta producto, alcance, gates, roadmap o estado operativo.
 
-Si no existe un Context Packet o Handoff suficiente, el agente debe generarlo antes de enrutar trabajo. Ningún agente debe ejecutar desde memoria incompleta, contexto antiguo o supuestos no verificados.
+Si no existe Context Packet o Handoff suficiente, generarlo antes de enrutar trabajo.
 
-## Separación de roles
+## Estado operativo actual
 
-- Product Architect define qué debe construirse, por qué, en qué orden y con qué criterios.
-- Scope Guardian clasifica alcance, riesgo y límites de ejecución.
-- Software Engineer audita, diagnostica y prepara instrucciones técnicas; no debe aprobar seguridad financiera ni revisar su propio trabajo.
-- Codex modifica archivos y prepara commits/PRs solo cuando el alcance está autorizado.
-- Operating Executor coordina ejecución práctica, evidencia, gates y handoffs; no aprueba seguridad financiera.
-- Financial Safety Reviewer revisa wallet, saldo, ledger, transferencias, payment requests, idempotency y estados financieros.
-- Frontend Surface Reviewer revisa claridad visual, estados, errores y riesgo de confusión en UI.
-- Founder approval es obligatorio antes de merge final o release.
+### Última fase cerrada
 
-## Roadmap operativo obligatorio
+- Phase 1.4 — Account, Wallet & Single Fiat Balance.
+- Estado: MERGED + POST-MERGE VALIDATED.
 
-### Fases ya completadas
+### Fase en HOLD
+
+- Phase 1.5 — Frontend API Integration for Transfers and Payment Requests.
+- Issue: #16.
+- PR: #17.
+- PR status: closed / merged.
+- Merge commit: `e17624c997178edbe10831fa26b4de0f1d21751a`.
+- Head commit revisado por R3: `1034b76249086a5889a974630fa39a2233d8c483`.
+- Estado de fase: MERGED / POST-MERGE VALIDATION PENDING.
+- Issue #16 debe permanecer abierto hasta validar post-merge.
+- Phase 1.6 queda bloqueada hasta cerrar validación.
+
+### Alcance de PR #17
+
+Permitido y aplicado:
+
+- `src/App.tsx`;
+- `src/components/ServicesPage.tsx`;
+- `src/lib/api.ts`;
+- `src/types.ts`.
+
+Bloqueado salvo gate separado:
+
+- `server/**`;
+- DB/schema/migrations;
+- ledger;
+- money parser;
+- auth financiero;
+- `package.json`;
+- `pnpm-lock.yaml`;
+- `android/**`;
+- Figma;
+- Notion;
+- producción;
+- dinero real.
+
+### Estado de revisión Phase 1.5
+
+- R3 inicial: blocking / request changes operacional.
+- R3 re-review: APPROVED WITH CONDITIONS.
+- Condiciones pendientes de evidencia visible:
+  - `pnpm build`;
+  - `pnpm api:test`;
+  - `pnpm android:sync`;
+  - `git diff --check`;
+  - revisión manual mobile alrededor de 390x844;
+  - documentación de post-merge validation.
+
+Resultado requerido:
+
+- Si pasa validación: marcar Phase 1.5 como MERGED + POST-MERGE VALIDATED y preparar cierre de Issue #16.
+- Si falla validación: abrir Phase 1.5C hotfix y mantener Phase 1.6 bloqueada.
+
+## Roadmap operativo
+
+### Completadas
 
 - Phase 0.1 — Agent Operating System.
 - Phase 1.1A — Onboarding structure.
@@ -58,179 +110,62 @@ Si no existe un Context Packet o Handoff suficiente, el agente debe generarlo an
 - Phase 1.3B — V1 Product Surface Lock.
 - Phase 1.4 — Account, Wallet & Single Fiat Balance.
 
-### Fase activa
+### En espera
 
-Phase 1.5 — Frontend API Integration for Transfers and Payment Requests.
+- Phase 1.5C — Post-merge validation / safety fixes.
 
-Estado operativo actual:
+Incluye:
 
-- Issue: #16.
-- PR activo: #17.
-- Estado PR: open draft.
-- Merge: prohibido hasta cerrar gates.
-- Alcance aplicado en PR #17: frontend-only dentro de `src/**`.
-- Archivos modificados por PR #17:
-  - `src/App.tsx`;
-  - `src/components/ServicesPage.tsx`;
-  - `src/lib/api.ts`;
-  - `src/types.ts`.
-- Pendiente validación local:
-  - `pnpm build`;
-  - `pnpm api:test`;
-  - `pnpm android:sync`;
-  - `git diff --check`;
-  - revisión manual mobile alrededor de 390x844.
-- Pendiente Financial Safety Reviewer / Security & Ledger Auditor.
-- Pendiente Frontend Surface Reviewer.
-- Pendiente Founder approval.
-
-Debe tratarse como una fase de integración frontend contra APIs backend ya existentes. No es una fase para crear nuevos productos, cambiar ledger, cambiar base de datos, rediseñar backend financiero o habilitar producción.
-
-División recomendada:
-
-- Phase 1.5A — Read-only frontend integration:
-  - wallet desde backend;
-  - activity desde backend;
-  - listas de payment requests;
-  - estados de carga, vacío y error;
-  - sin activar acciones que muevan saldo si el alcance no está cerrado.
-
-- Phase 1.5B — Money-moving frontend actions:
-  - transfer submission;
-  - payment request creation;
-  - payment request payment;
-  - payment request cancellation;
-  - idempotency cuando aplique;
-  - no false success states;
-  - refresh de wallet/activity/requests después de acciones confirmadas por backend.
-
-- Phase 1.5C — Financial Safety Review fixes:
-  - corregir hallazgos del Financial Safety Reviewer;
-  - corregir hallazgos del Frontend Surface Reviewer;
-  - repetir validación local;
-  - no agregar features nuevas;
-  - no hacer merge hasta aprobación humana explícita.
+- ejecutar y documentar validación post-merge;
+- corregir hallazgos si aparecen;
+- repetir validación después de cualquier fix;
+- no agregar features nuevas;
+- no tocar backend salvo gate técnico separado.
 
 ### Siguientes fases V1
 
-- Phase 1.6 — Receipts and activity proof.
+- Phase 1.6 — Receipts and activity proof. Bloqueada hasta cerrar Phase 1.5.
 - Phase 1.7 — Basic QR display for payment requests, without camera scanner.
 - Phase 1.8 — Basic merchant mode.
-- Phase 1.9 — Demo hardening: edge cases, loading states, empty states, error states, copy and mobile clarity.
+- Phase 1.9 — Demo hardening.
 - Phase 1.10 — V1 release candidate freeze.
 
-### Roadmap Android
+## Reglas de producto V1
 
-- Android 0 — Mantener `pnpm android:sync` pasando después de cambios web relevantes.
-- Android 1 — Ejecutar la app en emulador o dispositivo Android.
-- Android 2 — Validar flujos V1 en viewport móvil y shell nativo.
-- Android 3 — Preparar build interno de prueba.
-- Android 4 — Preparación de tienda solo después de cierre V1, revisión financiera y aprobación humana.
-
-### Roadmap iOS
-
-- iOS 0 — Gate de decisión. iOS no es fase activa mientras el core V1 y Android no estén estables.
-- iOS 1 — Agregar plataforma iOS solo después de core V1 y estabilidad Android.
-- iOS 2 — Xcode build y validación en simulador.
-- iOS 3 — TestFlight solo después de gates de seguridad, compliance y aprobación humana.
-
-## Reglas del producto
-
-- El saldo fiat local (PEN en el MVP) se utiliza para pagos, envíos, transferencias, retiros, comercios y tarjetas futuras.
 - PEN es el único balance público visible en V1.
-- USDT debe permanecer oculto públicamente en V1.
+- USDT permanece oculto públicamente en V1.
 - No presentar USDT como medio de pago cotidiano.
 - No habilitar conversions en V1 salvo decisión explícita posterior.
-- Toda operación debe tener estado, trazabilidad, actividad y comprobante.
-- Mantener visibles las diferencias entre saldo disponible, pendiente y retenido cuando existan.
-- Android es la plataforma principal. La vista web es el entorno rápido de desarrollo y validación.
-- Ninguna función demo debe presentarse como una integración financiera real.
-
-## Arquitectura actual
-
-- Frontend: React 19, TypeScript y Vite.
-- Android: Capacitor, proyecto nativo dentro de `android/`.
-- Backend local: Node.js y SQLite integrado dentro de `server/`.
-- Contabilidad: ledger de doble entrada con montos almacenados como enteros.
-- Persistencia visual demo: `localStorage` solo cuando el flujo aún no esté integrado a la API.
 - Backend es fuente de verdad para wallet, saldo, activity, transfers y payment requests.
-
-## Diseño
-
-- Identidad visual basada en blanco y negro con verde lima como acento.
-- Logotipo tipográfico: `ionPAY`.
-- Diseño móvil limpio, con saldo principal negro, acciones circulares y navegación inferior.
-- Conservar accesibilidad, estados visibles, zonas seguras de Android y diseño responsive.
-- No eliminar módulos existentes al reorganizar pantallas sin gate de producto y alcance.
-- No hacer rediseño visual dentro de fases financieras salvo que el scope lo permita explícitamente.
-
-## Módulos por alcance
-
-### IN V1 / Core
-
-- Cuenta, registro/login, estado de cuenta y KYC básico si ya existe en backend.
-- Wallet PEN.
-- Transferencias internas.
-- Cobros / payment requests.
-- Historial / activity.
-- Comprobantes.
-- QR básico como display, no camera scanner todavía.
-- Modo comercio básico cuando el core esté estable.
-
-### LATER / fuera de V1 salvo aprobación explícita
-
-- USDT público.
-- Conversions.
-- IonExchange Link.
-- Ion Card e Ion Disposable Card.
-- Ion Touch / NFC.
-- QR camera scanning.
-- Ion Checkout avanzado.
-- Ion Gateway.
-- Ion Payouts.
-- Cashback.
-- Referidos.
-- Loans.
-- Multi-currency public surface.
-- Producción pública o dinero real.
-
-## Seguridad y Git
-
-- Nunca incluir contraseñas, tokens, API keys, credenciales, archivos `.env`, keystores o datos financieros reales.
-- No conectar proveedores financieros reales sin requisitos, credenciales de prueba y autorización explícita.
-- No usar números de punto flotante para saldos o asientos contables del backend.
-- Mantener commits pequeños y descriptivos; no reescribir historial compartido.
-- Preservar cambios del usuario y evitar operaciones destructivas de Git.
-- No cambiar schema, migrations, ledger, money parser, auth o rutas financieras sin gate técnico y Financial Safety Reviewer.
-- No agregar dependencias ni modificar package/lockfile si la fase no lo autoriza.
-- No tocar Android/iOS packaging durante fases frontend/backend salvo gate móvil explícito.
+- Ninguna función demo debe presentarse como integración financiera real.
+- Android es la plataforma principal; iOS no es fase activa.
 
 ## Gates obligatorios
 
-1. Scope gate: clasifica IN V1, V1 SUPPORT, LATER, REQUIRES FOUNDER DECISION o REJECT.
-2. Technical gate: define archivos permitidos, contratos API, pruebas y comandos.
-3. Financial safety gate: obligatorio si toca wallet, saldo, ledger, auth, payment requests, transfers, DB, idempotency o estados de éxito/error de dinero.
-4. Frontend review gate: obligatorio después de cambios visibles.
-5. Mobile gate: obligatorio antes de Android/iOS packaging o store preparation.
-6. Founder approval gate: obligatorio antes de merge final o release.
+1. Scope gate.
+2. Technical gate.
+3. Financial safety gate.
+4. Frontend review gate.
+5. Mobile gate.
+6. Founder approval gate.
+7. Post-merge validation gate cuando un PR financiero ya fue mergeado sin evidencia final visible.
 
-## Comandos
+## Comandos mínimos
 
 ```bash
 pnpm install
-pnpm dev
 pnpm build
-pnpm api
 pnpm api:test
 pnpm android:sync
+git diff --check
 ```
 
-## Verificación mínima antes de entregar cambios
+## Verificación mínima
 
 1. Ejecutar `pnpm build`.
-2. Ejecutar `pnpm api:test` cuando se modifique backend, autenticación, saldos o transacciones.
-3. Ejecutar `pnpm api:test` cuando el frontend invoque rutas financieras, aunque `server/**` no cambie.
-4. Probar visualmente las pantallas modificadas en tamaño móvil.
-5. Sincronizar Android mediante `pnpm android:sync` cuando cambien archivos web que deban llegar al APK.
-6. Ejecutar `git diff --check` antes de entregar PRs.
-7. Reportar evidencia: fase, issue/PR, archivos cambiados, comandos ejecutados, resultado, riesgos restantes y revisor requerido.
+2. Ejecutar `pnpm api:test` si se toca backend, auth, wallet, saldo, ledger, transfers o payment requests.
+3. Ejecutar `pnpm api:test` cuando frontend invoque rutas financieras, aunque `server/**` no cambie.
+4. Probar pantallas modificadas en tamaño móvil.
+5. Ejecutar `pnpm android:sync` cuando cambios web deban llegar al APK.
+6. Ejecutar `git diff --check`.
+7. Reportar fase, issue/PR, archivos, comandos, resultados, riesgos restantes y revisor requerido.
