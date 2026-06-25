@@ -54,18 +54,19 @@ export default function PaymentRequestQr({ request, identifier, statusText, mode
   const payload = buildPaymentRequestQrPayload(request.id)
   const cells = qrCells(payload)
   const warning = mode === 'demo'
-    ? 'QR demo local. No mueve dinero real.'
-    : 'QR local de ionPAY V1. No es producción. No mueve dinero por sí mismo.'
+    ? 'QR demo local. No mueve dinero real, no cobra y no confirma una solicitud.'
+    : 'QR local de ionPAY V1. No es producción, no mueve dinero, no cobra y no confirma una solicitud.'
 
   return (
-    <article className={`payment-request-qr ${mode}`} aria-label={`QR local para solicitud ${request.reference}`}>
+    <article className={`payment-request-qr ${mode}`} aria-label={`QR local informativo para solicitud pendiente ${request.reference}`}>
       <style>{styles}</style>
       <div className="payment-request-qr-code" aria-hidden="true">
         {cells.map((active, index) => <i key={index} className={active ? 'active' : undefined} />)}
       </div>
       <div className="payment-request-qr-copy">
         <span className="eyebrow">QR local ionPAY V1</span>
-        <h3>Solicitud de pago</h3>
+        <h3>QR informativo de solicitud</h3>
+        <p className="payment-request-qr-context">Solicitud pendiente: todavía no es pago confirmado ni receipt/proof de actividad.</p>
         <dl>
           <div><dt>Monto</dt><dd>{money(request.amount)}</dd></div>
           <div><dt>Moneda</dt><dd>PEN</dd></div>
@@ -131,6 +132,13 @@ const styles = `
   margin: 0;
   font: 800 16px/1.15 'Manrope', system-ui, sans-serif;
   letter-spacing: -.35px;
+}
+.payment-request-qr-context {
+  margin: 0;
+  color: #52605c;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.45;
 }
 .payment-request-qr-copy dl {
   display: grid;
@@ -208,6 +216,7 @@ const styles = `
   }
   .payment-request-qr-copy dt,
   .payment-request-qr-copy dd,
+  .payment-request-qr-context,
   .payment-request-qr-warning,
   .payment-request-qr-safety {
     font-size: 9px;
