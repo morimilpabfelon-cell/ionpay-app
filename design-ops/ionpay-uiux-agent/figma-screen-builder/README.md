@@ -1,29 +1,43 @@
 # ionPAY Figma Screen Builder
 
-Local Figma plugin for generating editable ionPAY screens from JSON packs.
+Local Figma plugin for generating editable ionPAY screens from module packs and device matrices.
 
 This plugin is part of the UI/UX operation center. It is not shipped with the ionPAY app.
 
 ## Current MVP behavior
 
-The current MVP generates a starter pack automatically when the plugin runs.
+The current MVP generates a multi-device module matrix automatically when the plugin runs.
 
 This is intentional. It makes the plugin usable even while the plugin UI is still basic.
 
-Generated starter screens:
+Generated starter modules:
 
 1. Home.
 2. Pagar.
 3. Cobrar QR.
 4. Comprobante.
 5. Actividad.
-6. `#ascii Receipt`.
+6. Perfil.
+7. Merchant.
+8. `#ascii Receipt`.
+
+Generated starter devices:
+
+1. Standard Android — 390 x 844.
+2. Tablet Portrait — 768 x 1024.
+3. Tablet Landscape — 1024 x 768.
+
+The plugin architecture also defines additional target devices:
+
+- Small Android — 360 x 780.
+- Large Phone — 430 x 932.
 
 ## What it does
 
-- Creates editable mobile frames in Figma.
+- Creates editable Figma frames across phone and tablet sizes.
 - Generates text layers, cards, buttons, lists, proof rows and receipt-like states.
 - Supports core style and `#ascii` style.
+- Generates module families, not isolated demo screens.
 - Avoids relying on ChatGPT → Figma MCP calls for bulk screen generation.
 
 ## What it does not do
@@ -45,12 +59,14 @@ Generated starter screens:
 ```
 
 4. Run `ionPAY Screen Builder`.
-5. The plugin generates the default starter pack automatically.
+5. The plugin generates the default module/device matrix automatically.
 
 ## Planned next improvement
 
 The UI shell already exists but is intentionally minimal. Next versions should allow:
 
+- selecting target devices;
+- selecting modules;
 - selecting core or ASCII packs;
 - pasting custom JSON;
 - generating selected screens only;
