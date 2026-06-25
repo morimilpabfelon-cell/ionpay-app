@@ -22,7 +22,7 @@ const sectionHelpStyle = {
   fontSize: '11px',
   lineHeight: 1.45,
   maxWidth: 420,
-}
+} as const
 
 const requestNoticeStyle = {
   display: 'grid',
@@ -35,7 +35,7 @@ const requestNoticeStyle = {
   color: '#61706c',
   fontSize: '10px',
   lineHeight: 1.45,
-}
+} as const
 
 function money(amount: number) {
   return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(amount)
