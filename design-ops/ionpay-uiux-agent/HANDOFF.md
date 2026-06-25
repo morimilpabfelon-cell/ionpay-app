@@ -28,14 +28,22 @@ This folder contains:
 
 - operation center README;
 - agent access policy;
+- design authority charter;
 - full UI/UX design scope document;
+- code-driven design workflow;
+- implementation bridge;
+- design tokens in JSON and CSS;
+- component specifications;
 - local Figma plugin MVP;
+- static responsive prototype;
 - starter core pack;
 - starter ASCII pack.
 
 ## Why this exists
 
 Figma MCP tool calls were repeatedly blocked by rate limits and safety filters. The plugin moves bulk design generation into a local Figma plugin, avoiding dependence on ChatGPT-to-Figma MCP calls for large screen sets.
+
+The code-driven design layer also makes ionPAY design executable as tokens, specs and prototypes before production implementation.
 
 ## Founder clarification now incorporated
 
@@ -48,7 +56,8 @@ The actual responsibility is:
 - design phone and tablet variants;
 - show how the product adapts across compact phones, standard Android, large phones and tablets;
 - maintain separation between design artifacts and app implementation;
-- keep other agents in observe/read mode unless routed.
+- keep other agents in observe/read mode unless routed;
+- maintain design as code where useful, without touching production logic.
 
 ## Current plugin status
 
@@ -76,6 +85,23 @@ Additional device targets are defined in the plugin for future selection:
 - Small Android — 360 x 780.
 - Large Phone — 430 x 932.
 
+## Current coded prototype status
+
+The first static responsive prototype exists at:
+
+```text
+design-ops/ionpay-uiux-agent/prototypes/responsive-shell.html
+```
+
+It demonstrates:
+
+- responsive phone/tablet shell;
+- wallet card hierarchy;
+- primary actions;
+- proof states;
+- ASCII receipt proof state;
+- design-only warnings.
+
 ## Important boundary
 
 This is not production app implementation.
@@ -102,11 +128,11 @@ Other agents must not change design packs, generate design direction or run visu
 
 - Financial risk: low while kept as design tooling.
 - Product risk: medium if mistaken as implementation authorization.
-- Mitigation: folder isolation, policy file, design scope document and PR draft classification.
+- Mitigation: folder isolation, policy file, design scope document, implementation bridge and PR draft classification.
 
 ## Required gates before app implementation
 
-Generated screens require normal gates before becoming app code:
+Generated screens, tokens, component specs and coded prototypes require normal gates before becoming app code:
 
 1. Agent Orchestrator routing.
 2. Scope Guardian classification.
@@ -121,4 +147,5 @@ Generated screens require normal gates before becoming app code:
 2. Improve UI shell to select modules and devices.
 3. Expand packs to the 20+ module target in `DESIGN_SYSTEM_SCOPE.md`.
 4. Add design notes per module: phone, tablet, risk, false-success prevention.
-5. Keep the PR draft until the founder confirms the operation center structure.
+5. Expand the static prototype into multiple module prototypes.
+6. Keep the PR draft until the founder confirms the operation center structure.
