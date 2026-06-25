@@ -27,7 +27,7 @@ const sectionHelpStyle = {
 const requestNoticeStyle = {
   display: 'grid',
   gap: 3,
-  margin: '0 2px 12px 57px',
+  margin: '0 0 12px 0',
   padding: '10px 12px',
   borderRadius: 14,
   background: '#f7faf8',
