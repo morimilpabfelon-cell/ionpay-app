@@ -12,6 +12,7 @@ interface ServicesPageProps {
   onPayRequest: (id: string) => Promise<void>
   onCancelRequest: (id: string) => Promise<void>
   processingRequestId: string | null
+  requestOperationPending: boolean
 }
 
 function money(amount: number) {
@@ -25,7 +26,7 @@ function statusLabel(status: PaymentRequest['status']) {
   return 'Expirada'
 }
 
-function RequestRow({ request, kind, processing, onPay, onCancel }: { request: PaymentRequest; kind: 'received' | 'created'; processing: boolean; onPay: (id: string) => void; onCancel: (id: string) => void }) {
+function RequestRow({ request, kind, processing, disabled, onPay, onCancel }: { request: PaymentRequest; kind: 'received' | 'created'; processing: boolean; disabled: boolean; onPay: (id: string) => void; onCancel: (id: string) => void }) {
   const isPending = request.status === 'PENDING'
   const alias = kind === 'received' ? request.requesterAlias : request.payerAlias
   const detail = kind === 'received' ? 'Solicitud recibida' : 'Solicitud creada'
@@ -35,13 +36,13 @@ function RequestRow({ request, kind, processing, onPay, onCancel }: { request: P
       <span className={`transaction-icon ${kind === 'received' ? 'outgoing' : 'incoming'}`}><PayIcon /></span>
       <span className="transaction-main"><strong>@{alias}</strong><small>{detail} · {request.note || request.reference}</small></span>
       <span className={`transaction-amount ${kind === 'received' ? 'out' : 'in'}`}><strong>{money(request.amount)}</strong><small>{statusLabel(request.status)}</small></span>
-      {kind === 'received' && isPending && <button className="secondary-button" type="button" disabled={processing} onClick={() => onPay(request.id)}>{processing ? 'Pagando...' : 'Pagar'}</button>}
-      {kind === 'created' && isPending && <button className="secondary-button" type="button" disabled={processing} onClick={() => onCancel(request.id)}>{processing ? 'Cancelando...' : 'Cancelar'}</button>}
+      {kind === 'received' && isPending && <button className="secondary-button" type="button" disabled={disabled} onClick={() => onPay(request.id)}>{processing ? 'Pagando...' : 'Pagar'}</button>}
+      {kind === 'created' && isPending && <button className="secondary-button" type="button" disabled={disabled} onClick={() => onCancel(request.id)}>{processing ? 'Cancelando...' : 'Cancelar'}</button>}
     </div>
   )
 }
 
-export default function ServicesPage({ state, paymentRequests, openAction, onPayRequest, onCancelRequest, processingRequestId }: ServicesPageProps) {
+export default function ServicesPage({ state, paymentRequests, openAction, onPayRequest, onCancelRequest, processingRequestId, requestOperationPending }: ServicesPageProps) {
   const [merchantActive, setMerchantActive] = useState(false)
   const received = state.transactions.filter((transaction) => transaction.direction === 'in' && transaction.currency === 'PEN')
   const totalReceived = received.reduce((total, transaction) => total + transaction.amount, 0)
@@ -67,12 +68,12 @@ export default function ServicesPage({ state, paymentRequests, openAction, onPay
 
       <section className="section-card full-list" style={{ marginBottom: 18 }}>
         <div className="section-title" style={{ padding: '18px 18px 0' }}><div><span className="eyebrow">Solicitudes recibidas</span><h2>Por pagar</h2></div><PayIcon /></div>
-        {pendingReceived.length ? pendingReceived.map((request) => <RequestRow key={request.id} request={request} kind="received" processing={processingRequestId === request.id} onPay={(id) => void onPayRequest(id)} onCancel={(id) => void onCancelRequest(id)} />) : <div className="empty-state"><CheckIcon /><strong>No tienes solicitudes pendientes</strong><span>Las solicitudes asignadas a tu IonTag aparecerán aquí.</span></div>}
+        {pendingReceived.length ? pendingReceived.map((request) => <RequestRow key={request.id} request={request} kind="received" processing={processingRequestId === request.id} disabled={requestOperationPending} onPay={(id) => void onPayRequest(id)} onCancel={(id) => void onCancelRequest(id)} />) : <div className="empty-state"><CheckIcon /><strong>No tienes solicitudes pendientes</strong><span>Las solicitudes asignadas a tu IonTag aparecerán aquí.</span></div>}
       </section>
 
       <section className="section-card full-list" style={{ marginBottom: 18 }}>
         <div className="section-title" style={{ padding: '18px 18px 0' }}><div><span className="eyebrow">Solicitudes creadas</span><h2>Cobros solicitados</h2></div><QrIcon /></div>
-        {visibleCreated.length ? visibleCreated.map((request) => <RequestRow key={request.id} request={request} kind="created" processing={processingRequestId === request.id} onPay={(id) => void onPayRequest(id)} onCancel={(id) => void onCancelRequest(id)} />) : <div className="empty-state"><QrIcon /><strong>No creaste solicitudes</strong><span>Crea una solicitud para pedir un pago en PEN.</span></div>}
+        {visibleCreated.length ? visibleCreated.map((request) => <RequestRow key={request.id} request={request} kind="created" processing={processingRequestId === request.id} disabled={requestOperationPending} onPay={(id) => void onPayRequest(id)} onCancel={(id) => void onCancelRequest(id)} />) : <div className="empty-state"><QrIcon /><strong>No creaste solicitudes</strong><span>Crea una solicitud para pedir un pago en PEN.</span></div>}
       </section>
 
       {merchantActive && (

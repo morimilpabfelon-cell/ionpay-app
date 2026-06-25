@@ -233,10 +233,12 @@ export const api = {
     return mapActivity(response.activity)
   },
 
-  async createTransfer(input: { recipientAlias: string; amount: string; note?: string }) {
+  createIdempotencyKey,
+
+  async createTransfer(input: { recipientAlias: string; amount: string; note?: string }, idempotencyKey: string) {
     return request<MoneyOperationResponse>('/api/transfers', {
       method: 'POST',
-      headers: { 'Idempotency-Key': createIdempotencyKey() },
+      headers: { 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify({
         recipientAlias: normalizeAlias(input.recipientAlias),
         amount: input.amount,
@@ -245,10 +247,10 @@ export const api = {
     }, true)
   },
 
-  async createPaymentRequest(input: { payerAlias: string; amount: string; note?: string; expiresInDays?: number }) {
+  async createPaymentRequest(input: { payerAlias: string; amount: string; note?: string; expiresInDays?: number }, idempotencyKey: string) {
     return request<{ paymentRequest: PaymentRequest }>('/api/payment-requests', {
       method: 'POST',
-      headers: { 'Idempotency-Key': createIdempotencyKey() },
+      headers: { 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify({
         payerAlias: normalizeAlias(input.payerAlias),
         currency: 'PEN',
@@ -269,10 +271,10 @@ export const api = {
     return response.paymentRequests
   },
 
-  async payPaymentRequest(id: string) {
+  async payPaymentRequest(id: string, idempotencyKey: string) {
     return request<MoneyOperationResponse>(`/api/payment-requests/${encodeURIComponent(id)}/pay`, {
       method: 'POST',
-      headers: { 'Idempotency-Key': createIdempotencyKey() },
+      headers: { 'Idempotency-Key': idempotencyKey },
       body: JSON.stringify({}),
     }, true)
   },

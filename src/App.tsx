@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   ActivityIcon,
   ArrowDownIcon,
@@ -31,6 +31,7 @@ type Tab = 'home' | 'activity' | 'services' | 'profile'
 type Action = 'send' | 'receive' | 'pay' | null
 type AppMode = 'checking' | 'signed-out' | 'api' | 'demo'
 type PaymentRequestState = { received: PaymentRequest[]; created: PaymentRequest[] }
+type ToastState = { message: string; variant: 'success' | 'error' } | null
 
 const emptyPaymentRequests: PaymentRequestState = { received: [], created: [] }
 
@@ -213,6 +214,7 @@ function ActionModal({ action, state, demoMode, paymentRequests, processing, pro
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const pendingReceived = paymentRequests.received.filter((request) => request.status === 'PENDING')
+  const requestBusy = processing || Boolean(processingRequestId)
 
   const config = {
     send: { title: 'Enviar dinero', eyebrow: demoMode ? 'Modo demostración' : 'Transferencia IONPAY API', target: 'Destinatario', placeholder: '@usuario o celular', button: 'Confirmar envío' },
@@ -249,7 +251,7 @@ function ActionModal({ action, state, demoMode, paymentRequests, processing, pro
   }
 
   const payRequest = async (id: string) => {
-    if (processingRequestId) return
+    if (processing || processingRequestId) return
     setError('')
     try {
       await onApiPayRequest(id)
@@ -259,12 +261,12 @@ function ActionModal({ action, state, demoMode, paymentRequests, processing, pro
   }
 
   return (
-    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !processing && onClose()}>
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !requestBusy && onClose()}>
       <section className="modal" role="dialog" aria-modal="true">
-        <button className="modal-close" onClick={onClose} disabled={processing || Boolean(processingRequestId)}><CloseIcon /></button>
+        <button className="modal-close" onClick={onClose} disabled={requestBusy}><CloseIcon /></button>
         <span className="eyebrow">{config.eyebrow}</span><h2>{config.title}</h2>
         {action === 'receive' && demoMode ? <ReceivePanel user={state.user!} /> : null}
-        {action === 'pay' && !demoMode ? <div><div className="notice-box"><strong>Pagos confirmados por backend</strong><p>El saldo no se modifica localmente. Después de pagar se recargan wallet, actividad y solicitudes.</p></div><div className="full-list" style={{ padding: 0, marginTop: 14 }}>{pendingReceived.length ? pendingReceived.map((request) => <div className="transaction-row" key={request.id}><span className="transaction-icon outgoing"><PayIcon /></span><span className="transaction-main"><strong>@{request.requesterAlias}</strong><small>{request.note || request.reference} · vence {shortDate(request.expiresAt)}</small></span><span className="transaction-amount out"><strong>{money(request.amount, 'PEN')}</strong><small>{request.status}</small></span><button className="secondary-button" type="button" disabled={processingRequestId === request.id} onClick={() => void payRequest(request.id)}>{processingRequestId === request.id ? 'Pagando...' : 'Pagar'}</button></div>) : <EmptyActivity />}</div>{error && <div className="form-error">{error}</div>}</div> : null}
+        {action === 'pay' && !demoMode ? <div><div className="notice-box"><strong>Pagos confirmados por backend</strong><p>El saldo no se modifica localmente. Después de pagar se recargan wallet, actividad y solicitudes.</p></div><div className="full-list" style={{ padding: 0, marginTop: 14 }}>{pendingReceived.length ? pendingReceived.map((request) => <div className="transaction-row" key={request.id}><span className="transaction-icon outgoing"><PayIcon /></span><span className="transaction-main"><strong>@{request.requesterAlias}</strong><small>{request.note || request.reference} · vence {shortDate(request.expiresAt)}</small></span><span className="transaction-amount out"><strong>{money(request.amount, 'PEN')}</strong><small>{request.status}</small></span><button className="secondary-button" type="button" disabled={requestBusy} onClick={() => void payRequest(request.id)}>{processingRequestId === request.id ? 'Pagando...' : 'Pagar'}</button></div>) : <EmptyActivity />}</div>{error && <div className="form-error">{error}</div>}</div> : null}
         {action !== 'pay' || demoMode ? <form onSubmit={submit}>{!(action === 'receive' && demoMode) && <label className="field"><span>{config.target}</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder={config.placeholder} autoFocus /></label>}{!(action === 'receive' && demoMode) && <label className="field amount-field"><span>Monto</span><div><b>S/</b><input value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" inputMode="decimal" /></div><small>Disponible: {money(state.wallet.pen, 'PEN')}</small></label>}{!(action === 'receive' && demoMode) && <label className="field"><span>Nota <i>(opcional)</i></span><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="¿Para qué es?" maxLength={120} /></label>}{error && <div className="form-error">{error}</div>}{!(action === 'receive' && demoMode) && <button className="primary-button" type="submit" disabled={processing}>{processing ? 'Procesando...' : config.button}</button>}<div className="safe-caption"><ShieldIcon /> {demoMode ? 'Simulación local: no mueve dinero real' : 'API local: backend es fuente de verdad, PEN-only'}</div></form> : null}
       </section>
     </div>
@@ -297,13 +299,24 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('home')
   const [action, setAction] = useState<Action>(null)
   const [receipt, setReceipt] = useState<Transaction | null>(null)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState<ToastState>(null)
   const [processing, setProcessing] = useState(false)
   const [processingRequestId, setProcessingRequestId] = useState<string | null>(null)
+  const moneyOperationInFlight = useRef(false)
 
-  const flash = (message: string) => {
-    setToast(message)
-    window.setTimeout(() => setToast(''), 2600)
+  const flash = (message: string, variant: 'success' | 'error' = 'success') => {
+    setToast({ message, variant })
+    window.setTimeout(() => setToast(null), 2600)
+  }
+
+  const beginMoneyOperation = () => {
+    if (moneyOperationInFlight.current) return false
+    moneyOperationInFlight.current = true
+    return true
+  }
+
+  const endMoneyOperation = () => {
+    moneyOperationInFlight.current = false
   }
 
   const loadApiState = async (knownUser?: User) => {
@@ -349,6 +362,7 @@ export default function App() {
     setState(savedDemo.user ? savedDemo : structuredClone(demoState))
     setPaymentRequests(emptyPaymentRequests)
     setConnectionError('')
+    moneyOperationInFlight.current = false
     setMode('demo')
   }
 
@@ -357,6 +371,9 @@ export default function App() {
     if (mode === 'demo') clearState()
     setState({ user: null, wallet: { pen: 0, usdt: 0 }, transactions: [] })
     setPaymentRequests(emptyPaymentRequests)
+    moneyOperationInFlight.current = false
+    setProcessing(false)
+    setProcessingRequestId(null)
     setMode('signed-out')
     setTab('home')
   }
@@ -369,8 +386,10 @@ export default function App() {
     flash('Simulación completada')
   }
 
-  const applyConfirmedMoneyOperation = async (operation: () => Promise<MoneyOperationResponse>, successMessage: string) => {
+  const applyConfirmedMoneyOperation = async (operation: () => Promise<MoneyOperationResponse>, successMessage: string, requestId?: string) => {
+    if (!beginMoneyOperation()) return
     setProcessing(true)
+    if (requestId) setProcessingRequestId(requestId)
     try {
       const response = await operation()
       const nextState = await loadApiState()
@@ -384,35 +403,47 @@ export default function App() {
       }
     } finally {
       setProcessing(false)
+      if (requestId) setProcessingRequestId(null)
+      endMoneyOperation()
     }
   }
 
   const submitApiTransfer = async (input: { recipientAlias: string; amount: string; note?: string }) => {
     if (mode !== 'api') return
-    await applyConfirmedMoneyOperation(() => api.createTransfer(input), 'Transferencia confirmada')
+    await applyConfirmedMoneyOperation(() => {
+      const idempotencyKey = api.createIdempotencyKey()
+      return api.createTransfer(input, idempotencyKey)
+    }, 'Transferencia confirmada')
   }
 
   const submitApiPaymentRequest = async (input: { payerAlias: string; amount: string; note?: string }) => {
     if (mode !== 'api') return
+    if (!beginMoneyOperation()) return
     setProcessing(true)
     try {
-      await api.createPaymentRequest(input)
+      const idempotencyKey = api.createIdempotencyKey()
+      await api.createPaymentRequest(input, idempotencyKey)
       await loadApiState()
       setAction(null)
       flash('Solicitud de pago creada')
     } finally {
       setProcessing(false)
+      endMoneyOperation()
     }
   }
 
   const payPaymentRequest = async (id: string) => {
     if (mode !== 'api') return
-    setProcessingRequestId(id)
-    try { await applyConfirmedMoneyOperation(() => api.payPaymentRequest(id), 'Pago confirmado') } finally { setProcessingRequestId(null) }
+    await applyConfirmedMoneyOperation(() => {
+      const idempotencyKey = api.createIdempotencyKey()
+      return api.payPaymentRequest(id, idempotencyKey)
+    }, 'Pago confirmado', id)
   }
 
   const cancelPaymentRequest = async (id: string) => {
     if (mode !== 'api') return
+    if (!beginMoneyOperation()) return
+    setProcessing(true)
     setProcessingRequestId(id)
     try {
       await api.cancelPaymentRequest(id)
@@ -420,15 +451,17 @@ export default function App() {
       flash('Solicitud cancelada')
     } finally {
       setProcessingRequestId(null)
+      setProcessing(false)
+      endMoneyOperation()
     }
   }
 
   const cancelPaymentRequestFromServices = async (id: string) => {
-    try { await cancelPaymentRequest(id) } catch (cause) { flash(errorMessage(cause, 'No se pudo cancelar la solicitud.')) }
+    try { await cancelPaymentRequest(id) } catch (cause) { flash(errorMessage(cause, 'No se pudo cancelar la solicitud.'), 'error') }
   }
 
   const payPaymentRequestFromServices = async (id: string) => {
-    try { await payPaymentRequest(id) } catch (cause) { flash(errorMessage(cause, 'No se pudo pagar la solicitud.')) }
+    try { await payPaymentRequest(id) } catch (cause) { flash(errorMessage(cause, 'No se pudo pagar la solicitud.'), 'error') }
   }
 
   if (mode === 'checking' || mode === 'signed-out' || !state.user) {
@@ -442,13 +475,13 @@ export default function App() {
         {mode === 'demo' && <div className="demo-caption">Modo demo · fondos simulados · no mueve dinero real</div>}
         {tab === 'home' && <Home state={state} setAction={setAction} setTab={setTab} openReceipt={setReceipt} />}
         {tab === 'activity' && <ActivityPage transactions={state.transactions} openReceipt={setReceipt} />}
-        {tab === 'services' && <ServicesPage state={state} paymentRequests={paymentRequests} openAction={(next) => setAction(next)} onPayRequest={payPaymentRequestFromServices} onCancelRequest={cancelPaymentRequestFromServices} processingRequestId={processingRequestId} />}
+        {tab === 'services' && <ServicesPage state={state} paymentRequests={paymentRequests} openAction={(next) => setAction(next)} onPayRequest={payPaymentRequestFromServices} onCancelRequest={cancelPaymentRequestFromServices} processingRequestId={processingRequestId} requestOperationPending={Boolean(processingRequestId)} />}
         {tab === 'profile' && <ProfilePage user={state.user} onReset={reset} logoutLabel={mode === 'demo' ? 'Salir y borrar datos demo' : 'Cerrar sesión'} />}
       </main>
       <MobileNav tab={tab} setTab={setTab} onPay={() => setAction('pay')} />
       {action && <ActionModal action={action} state={state} demoMode={mode === 'demo'} paymentRequests={paymentRequests} processing={processing} processingRequestId={processingRequestId} onClose={() => setAction(null)} onDemoTransaction={addDemoTransaction} onApiTransfer={submitApiTransfer} onApiPaymentRequest={submitApiPaymentRequest} onApiPayRequest={payPaymentRequest} />}
       {receipt && <ReceiptModal item={receipt} onClose={() => setReceipt(null)} />}
-      {toast && <div className="toast"><CheckIcon />{toast}</div>}
+      {toast && <div className={`toast ${toast.variant}`} role={toast.variant === 'error' ? 'alert' : 'status'}>{toast.variant === 'success' && <CheckIcon />}{toast.message}</div>}
     </div>
   )
 }
