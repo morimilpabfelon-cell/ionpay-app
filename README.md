@@ -25,7 +25,7 @@ Regla central:
 - Estado: **MERGED + POST-MERGE VALIDATED**
 - Resultado: wallet V1 con PEN como balance público, guards de operabilidad, reconciliación contra ledger, protección de payment requests, idempotency y tests backend pasando.
 
-### Fase actual en HOLD
+### Fase actual de validación final
 
 - **Phase 1.5 — Frontend API Integration for Transfers and Payment Requests**
 - Issue: **#16**
@@ -33,10 +33,33 @@ Regla central:
 - Estado PR: **closed / merged**
 - Merge commit: `e17624c997178edbe10831fa26b4de0f1d21751a`
 - Head commit revisado por R3: `1034b76249086a5889a974630fa39a2233d8c483`
-- Estado de fase: **MERGED / POST-MERGE VALIDATION PENDING**
+- Estado de fase: **MERGED / COMMAND VALIDATION COMPLETE / MANUAL MOBILE CHECK PENDING**
 - Riesgo: **R3** porque conecta frontend con rutas que pueden iniciar movimientos de saldo.
-- Issue #16 debe permanecer abierto hasta validar post-merge.
-- Phase 1.6 queda bloqueada hasta cerrar esta validación.
+- Phase 1.6 queda bloqueada hasta cerrar revisión manual mobile.
+
+Validación post-merge documentada:
+
+- `pnpm install --frozen-lockfile`: **PASS**.
+- `pnpm api:test`: **PASS**, 22/22.
+- `pnpm android:sync`: **PASS**.
+- `pnpm build`: **PASS** dentro de `pnpm android:sync`.
+- `git diff --check`: **PASS**.
+- `git status`: **PASS**, working tree clean.
+
+Pendiente para cierre total:
+
+- revisión manual mobile alrededor de 390x844;
+- registro/login;
+- wallet PEN;
+- activity;
+- crear solicitud de pago;
+- pagar solicitud;
+- cancelar solicitud;
+- doble click rápido en enviar/pagar/crear/cancelar;
+- errores backend visibles;
+- no falso éxito;
+- no USDT público;
+- no conversions.
 
 Alcance aplicado por PR #17:
 
@@ -65,18 +88,13 @@ Estado de revisión:
 
 - R3 inicial: **blocking / request changes operacional**.
 - R3 re-review: **APPROVED WITH CONDITIONS**.
-- Condiciones pendientes de evidencia visible:
-  - `pnpm build`;
-  - `pnpm api:test`;
-  - `pnpm android:sync`;
-  - `git diff --check`;
-  - revisión manual mobile alrededor de 390x844;
-  - documentación de post-merge validation.
+- Command validation: **COMPLETE**.
+- Manual mobile validation: **PENDING**.
 
 Resultado esperado:
 
-- Si la validación pasa: marcar Phase 1.5 como **MERGED + POST-MERGE VALIDATED** y preparar cierre de Issue #16.
-- Si la validación falla: abrir Phase 1.5C hotfix, mantener Issue #16 abierto y bloquear Phase 1.6.
+- Si la revisión manual mobile pasa: marcar Phase 1.5 como **MERGED + POST-MERGE VALIDATED** y habilitar Scope Guardian para Phase 1.6.
+- Si la revisión manual mobile falla: abrir Phase 1.5C hotfix, mantener Issue #16 en revisión operacional y bloquear Phase 1.6.
 
 ## Fases completadas
 
@@ -92,13 +110,12 @@ Resultado esperado:
 
 ## Roadmap V1
 
-### Phase 1.5C — Post-merge validation / safety fixes
+### Phase 1.5C — Manual mobile validation / safety fixes if needed
 
-Objetivo: validar el merge de PR #17 y corregir cualquier hallazgo antes de avanzar.
+Objetivo: validar manualmente el merge de PR #17 y corregir cualquier hallazgo antes de avanzar.
 
 Incluye:
 
-- ejecutar y documentar validación post-merge;
 - revisar flujo móvil en viewport aproximado 390x844;
 - verificar no doble submit;
 - verificar errores backend visibles sin falso éxito;
@@ -110,7 +127,7 @@ Incluye:
 
 ### Próximas fases V1
 
-- Phase 1.6 — Receipts and activity proof. **Bloqueada hasta cerrar Phase 1.5 post-merge validation.**
+- Phase 1.6 — Receipts and activity proof. **Bloqueada hasta cerrar Phase 1.5 manual mobile validation.**
 - Phase 1.7 — Basic QR display for payment requests, without camera scanner.
 - Phase 1.8 — Basic merchant mode.
 - Phase 1.9 — Demo hardening: edge cases, loading states, empty states, error states, copy and mobile clarity.
