@@ -4,12 +4,27 @@ Local Figma plugin for generating editable ionPAY screens from JSON packs.
 
 This plugin is part of the UI/UX operation center. It is not shipped with the ionPAY app.
 
+## Current MVP behavior
+
+The current MVP generates a starter pack automatically when the plugin runs.
+
+This is intentional. It makes the plugin usable even while the plugin UI is still basic.
+
+Generated starter screens:
+
+1. Home.
+2. Pagar.
+3. Cobrar QR.
+4. Comprobante.
+5. Actividad.
+6. `#ascii Receipt`.
+
 ## What it does
 
 - Creates editable mobile frames in Figma.
-- Generates text layers, cards, buttons, lists, QR placeholders and receipt blocks.
-- Supports multiple visual modes through packs.
-- Allows large screen sets without relying on ChatGPT → Figma MCP calls.
+- Generates text layers, cards, buttons, lists, proof rows and receipt-like states.
+- Supports core style and `#ascii` style.
+- Avoids relying on ChatGPT → Figma MCP calls for bulk screen generation.
 
 ## What it does not do
 
@@ -30,9 +45,17 @@ This plugin is part of the UI/UX operation center. It is not shipped with the io
 ```
 
 4. Run `ionPAY Screen Builder`.
-5. Choose a pack or paste JSON.
-6. Type the operational authorization phrase shown in the plugin UI.
-7. Generate the editable screens.
+5. The plugin generates the default starter pack automatically.
+
+## Planned next improvement
+
+The UI shell already exists but is intentionally minimal. Next versions should allow:
+
+- selecting core or ASCII packs;
+- pasting custom JSON;
+- generating selected screens only;
+- adding stricter design-agent authorization copy;
+- exporting pack metadata for handoff.
 
 ## Packs
 
