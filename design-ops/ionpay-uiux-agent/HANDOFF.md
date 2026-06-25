@@ -28,6 +28,7 @@ This folder contains:
 
 - operation center README;
 - agent access policy;
+- full UI/UX design scope document;
 - local Figma plugin MVP;
 - starter core pack;
 - starter ASCII pack.
@@ -36,18 +37,44 @@ This folder contains:
 
 Figma MCP tool calls were repeatedly blocked by rate limits and safety filters. The plugin moves bulk design generation into a local Figma plugin, avoiding dependence on ChatGPT-to-Figma MCP calls for large screen sets.
 
+## Founder clarification now incorporated
+
+The UI/UX Execution Agent is not responsible for only five starter screens.
+
+The actual responsibility is:
+
+- design the full ionPAY UI/UX system;
+- cover at least 20 core modules;
+- design phone and tablet variants;
+- show how the product adapts across compact phones, standard Android, large phones and tablets;
+- maintain separation between design artifacts and app implementation;
+- keep other agents in observe/read mode unless routed.
+
 ## Current plugin status
 
-The plugin MVP can generate a default editable starter pack automatically when run in Figma.
+The plugin MVP now generates a default editable module/device matrix automatically when run in Figma.
 
-Generated starter screens:
+Starter modules:
 
 1. Home.
 2. Pagar.
 3. Cobrar QR.
 4. Comprobante.
 5. Actividad.
-6. `#ascii Receipt`.
+6. Perfil.
+7. Merchant.
+8. `#ascii Receipt`.
+
+Starter devices:
+
+1. Standard Android — 390 x 844.
+2. Tablet Portrait — 768 x 1024.
+3. Tablet Landscape — 1024 x 768.
+
+Additional device targets are defined in the plugin for future selection:
+
+- Small Android — 360 x 780.
+- Large Phone — 430 x 932.
 
 ## Important boundary
 
@@ -75,7 +102,7 @@ Other agents must not change design packs, generate design direction or run visu
 
 - Financial risk: low while kept as design tooling.
 - Product risk: medium if mistaken as implementation authorization.
-- Mitigation: folder isolation, policy file and PR draft classification.
+- Mitigation: folder isolation, policy file, design scope document and PR draft classification.
 
 ## Required gates before app implementation
 
@@ -91,6 +118,7 @@ Generated screens require normal gates before becoming app code:
 ## Next recommended work
 
 1. Test the local plugin manually in Figma desktop.
-2. Improve UI shell to paste or select JSON packs.
-3. Expand packs to 30 screens after plugin proof works.
-4. Keep the PR draft until the founder confirms the operation center structure.
+2. Improve UI shell to select modules and devices.
+3. Expand packs to the 20+ module target in `DESIGN_SYSTEM_SCOPE.md`.
+4. Add design notes per module: phone, tablet, risk, false-success prevention.
+5. Keep the PR draft until the founder confirms the operation center structure.
