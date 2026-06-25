@@ -108,24 +108,17 @@ function Onboarding({
             {providerMessage && <div className="form-error">{providerMessage}</div>}
             <button
               className="primary-button"
-              onClick={() => handleProviderClick('Google')}
-              disabled={checking}
-            >
-              Continuar con Google
-            </button>
-            <button
-              className="primary-button"
               onClick={() => handleProviderClick('Apple')}
               disabled={checking}
             >
-              Continuar con Apple
+              Iniciar sesión con Apple
             </button>
             <button
               className="primary-button"
-              onClick={() => setStep('register')}
+              onClick={() => handleProviderClick('Google')}
               disabled={checking}
             >
-              Continuar con correo
+              Iniciar sesión con Google
             </button>
             <button className="text-button" onClick={onDemo}>
               Explorar versión demo
