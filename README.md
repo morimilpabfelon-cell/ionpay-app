@@ -31,12 +31,22 @@ Fase activa:
 
 - **Phase 1.5 — Frontend API Integration for Transfers and Payment Requests**
 - Issue: **#16**
-- Estado: **APPROVED FOR IMPLEMENTATION**
+- PR activo: **#17**
+- Estado: **PR #17 abierto en draft / pending validation and review**
 - Scope Guardian: **APPROVED FOR IMPLEMENTATION**
-- Alcance permitido: **frontend-only en `src/**`**.
+- Alcance aplicado: **frontend-only en `src/**`**.
+- Archivos modificados por PR #17:
+  - `src/App.tsx`;
+  - `src/components/ServicesPage.tsx`;
+  - `src/lib/api.ts`;
+  - `src/types.ts`.
 - Archivos bloqueados salvo aprobación separada: `server/**`, `package.json`, `pnpm-lock.yaml`, `android/**`, Figma y Notion.
 - Riesgo: **R3** porque conecta frontend con rutas que pueden iniciar movimientos de saldo.
-- Reviewer obligatorio posterior: **Financial Safety Reviewer / Security & Ledger Auditor**.
+- Pendiente validación local: `pnpm build`, `pnpm api:test`, `pnpm android:sync`, `git diff --check` y revisión mobile.
+- Pendiente: **Financial Safety Reviewer / Security & Ledger Auditor**.
+- Pendiente: **Frontend Surface Reviewer**.
+- Pendiente: **Founder approval**.
+- Estado de merge: **NO MERGE** hasta cerrar gates.
 
 ## Fases completadas
 
@@ -77,6 +87,18 @@ Incluye:
 - idempotency cuando aplique;
 - refresh de wallet/activity/requests después de confirmación backend;
 - no false success states.
+
+### Phase 1.5C — Financial Safety Review fixes
+
+Objetivo: corregir hallazgos del Financial Safety Reviewer y del Frontend Surface Reviewer antes de pasar a receipts o nuevas fases.
+
+Incluye:
+
+- correcciones de seguridad financiera sobre flujos frontend;
+- correcciones de UI que puedan causar falso éxito, doble envío o confusión de estado;
+- repetición de validación local;
+- ninguna feature nueva;
+- ningún cambio backend salvo gate técnico separado.
 
 ### Próximas fases V1
 
@@ -173,11 +195,19 @@ Sincronizar Android:
 pnpm android:sync
 ```
 
+Revisar diff:
+
+```bash
+git diff --check
+```
+
 Regla mínima:
 
 - ejecutar `pnpm build` antes de entregar cambios frontend;
 - ejecutar `pnpm api:test` si se toca backend, auth, wallet, saldo, ledger, transfers o payment requests;
+- ejecutar `pnpm api:test` cuando el frontend invoque rutas financieras, aunque `server/**` no cambie;
 - ejecutar `pnpm android:sync` cuando cambios web deban llegar al APK;
+- ejecutar `git diff --check` antes de entregar PRs;
 - reportar evidencia clara en PR.
 
 ## Android
