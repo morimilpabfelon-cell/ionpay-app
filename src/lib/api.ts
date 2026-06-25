@@ -97,7 +97,7 @@ function clearSession() {
 async function request<T>(path: string, options: RequestInit = {}, authenticated = false): Promise<T> {
   const session = authenticated ? readSession() : null
   if (authenticated && !session) {
-    throw new IonPayApiError(401, 'SESSION_EXPIRED', 'Tu sesiÃ³n expirÃ³. Inicia sesiÃ³n nuevamente.')
+    throw new IonPayApiError(401, 'SESSION_EXPIRED', 'Tu sesión expiró. Inicia sesión nuevamente.')
   }
 
   let response: Response
@@ -112,7 +112,7 @@ async function request<T>(path: string, options: RequestInit = {}, authenticated
       },
     })
   } catch {
-    throw new IonPayApiError(0, 'API_UNAVAILABLE', 'No pudimos conectar con la API de ionPAY. Verifica que el servidor estÃ© encendido.')
+    throw new IonPayApiError(0, 'API_UNAVAILABLE', 'No pudimos conectar con la API de ionPAY. Verifica que el servidor esté encendido.')
   }
 
   const body = await response.json().catch(() => ({})) as T & ErrorResponse
@@ -121,7 +121,7 @@ async function request<T>(path: string, options: RequestInit = {}, authenticated
     if (sessionExpired) clearSession()
     const code = sessionExpired ? 'SESSION_EXPIRED' : (body.error?.code || 'API_ERROR')
     const message = sessionExpired
-      ? 'Tu sesiÃ³n expirÃ³. Inicia sesiÃ³n nuevamente.'
+      ? 'Tu sesión expiró. Inicia sesión nuevamente.'
       : (body.error?.message || 'No se pudo completar la solicitud.')
     throw new IonPayApiError(response.status, code, message)
   }
@@ -147,7 +147,6 @@ function mapActivity(items: ActivityItem[]): Transaction[] {
       const outgoing = direction === 'out'
       return {
         id: item.reference,
-        backendId: item.id,
         kind: outgoing ? 'payment' : 'receive',
         title: outgoing ? 'Pago realizado' : 'Cobro recibido',
         counterpart: `@${outgoing ? requesterAlias : payerAlias}`,
@@ -164,10 +163,9 @@ function mapActivity(items: ActivityItem[]): Transaction[] {
     if (item.type === 'DEMO_FUNDING') {
       return {
         id: item.reference,
-        backendId: item.id,
         kind: 'receive',
         title: 'Saldo demo recibido',
-        counterpart: 'Fondeo de demostraciÃ³n',
+        counterpart: 'Fondeo de demostración',
         amount: Math.abs(item.amount),
         currency: 'PEN',
         direction: 'in',
@@ -180,7 +178,6 @@ function mapActivity(items: ActivityItem[]): Transaction[] {
 
     return {
       id: item.reference,
-      backendId: item.id,
       kind: direction === 'out' ? 'send' : 'receive',
       title: direction === 'out' ? 'Dinero enviado' : 'Dinero recibido',
       counterpart: `@${direction === 'out' ? recipientAlias : senderAlias}`,
