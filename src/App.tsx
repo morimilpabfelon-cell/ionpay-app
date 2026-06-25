@@ -481,7 +481,7 @@ export default function App() {
     try {
       const response = await operation()
       const nextState = await loadApiState()
-      const confirmed = confirmedTransaction(nextState.transactions, response)
+      const confirmed = confirmedTransaction(v1Transactions(nextState.transactions), response)
       setAction(null)
       if (confirmed) {
         setReceipt(confirmed)
