@@ -16,6 +16,34 @@ La regla central del proyecto es construir por fases. No se debe intentar desarr
 - No hacer merge sin autorización humana explícita.
 - No conectar producción ni dinero real sin decisión explícita del fundador y revisión financiera.
 
+## Memoria operativa obligatoria
+
+Antes de iniciar cualquier tarea, el agente activo debe consultar o reconstruir el estado operativo vigente desde estas fuentes, en este orden:
+
+1. ionPAY Agent Operating System / Orchestrator.
+2. 01_Project State.
+3. 02_Task Pipeline.
+4. 05_Risk Register.
+5. Último Context Packet relevante.
+6. Último Handoff relevante.
+7. `AGENTS.md`.
+8. `README.md`.
+9. GitHub, si la tarea afecta código, issues, PRs, branches o validación.
+10. Notion, si la tarea afecta producto, alcance, gates, roadmap o estado operativo.
+
+Si no existe un Context Packet o Handoff suficiente, el agente debe generarlo antes de enrutar trabajo. Ningún agente debe ejecutar desde memoria incompleta, contexto antiguo o supuestos no verificados.
+
+## Separación de roles
+
+- Product Architect define qué debe construirse, por qué, en qué orden y con qué criterios.
+- Scope Guardian clasifica alcance, riesgo y límites de ejecución.
+- Software Engineer audita, diagnostica y prepara instrucciones técnicas; no debe aprobar seguridad financiera ni revisar su propio trabajo.
+- Codex modifica archivos y prepara commits/PRs solo cuando el alcance está autorizado.
+- Operating Executor coordina ejecución práctica, evidencia, gates y handoffs; no aprueba seguridad financiera.
+- Financial Safety Reviewer revisa wallet, saldo, ledger, transferencias, payment requests, idempotency y estados financieros.
+- Frontend Surface Reviewer revisa claridad visual, estados, errores y riesgo de confusión en UI.
+- Founder approval es obligatorio antes de merge final o release.
+
 ## Roadmap operativo obligatorio
 
 ### Fases ya completadas
@@ -33,6 +61,28 @@ La regla central del proyecto es construir por fases. No se debe intentar desarr
 ### Fase activa
 
 Phase 1.5 — Frontend API Integration for Transfers and Payment Requests.
+
+Estado operativo actual:
+
+- Issue: #16.
+- PR activo: #17.
+- Estado PR: open draft.
+- Merge: prohibido hasta cerrar gates.
+- Alcance aplicado en PR #17: frontend-only dentro de `src/**`.
+- Archivos modificados por PR #17:
+  - `src/App.tsx`;
+  - `src/components/ServicesPage.tsx`;
+  - `src/lib/api.ts`;
+  - `src/types.ts`.
+- Pendiente validación local:
+  - `pnpm build`;
+  - `pnpm api:test`;
+  - `pnpm android:sync`;
+  - `git diff --check`;
+  - revisión manual mobile alrededor de 390x844.
+- Pendiente Financial Safety Reviewer / Security & Ledger Auditor.
+- Pendiente Frontend Surface Reviewer.
+- Pendiente Founder approval.
 
 Debe tratarse como una fase de integración frontend contra APIs backend ya existentes. No es una fase para crear nuevos productos, cambiar ledger, cambiar base de datos, rediseñar backend financiero o habilitar producción.
 
@@ -53,6 +103,13 @@ División recomendada:
   - idempotency cuando aplique;
   - no false success states;
   - refresh de wallet/activity/requests después de acciones confirmadas por backend.
+
+- Phase 1.5C — Financial Safety Review fixes:
+  - corregir hallazgos del Financial Safety Reviewer;
+  - corregir hallazgos del Frontend Surface Reviewer;
+  - repetir validación local;
+  - no agregar features nuevas;
+  - no hacer merge hasta aprobación humana explícita.
 
 ### Siguientes fases V1
 
@@ -172,6 +229,8 @@ pnpm android:sync
 
 1. Ejecutar `pnpm build`.
 2. Ejecutar `pnpm api:test` cuando se modifique backend, autenticación, saldos o transacciones.
-3. Probar visualmente las pantallas modificadas en tamaño móvil.
-4. Sincronizar Android mediante `pnpm android:sync` cuando cambien archivos web que deban llegar al APK.
-5. Reportar evidencia: fase, issue/PR, archivos cambiados, comandos ejecutados, resultado, riesgos restantes y revisor requerido.
+3. Ejecutar `pnpm api:test` cuando el frontend invoque rutas financieras, aunque `server/**` no cambie.
+4. Probar visualmente las pantallas modificadas en tamaño móvil.
+5. Sincronizar Android mediante `pnpm android:sync` cuando cambien archivos web que deban llegar al APK.
+6. Ejecutar `git diff --check` antes de entregar PRs.
+7. Reportar evidencia: fase, issue/PR, archivos cambiados, comandos ejecutados, resultado, riesgos restantes y revisor requerido.
