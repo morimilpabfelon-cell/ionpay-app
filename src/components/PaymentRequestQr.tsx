@@ -54,8 +54,8 @@ export default function PaymentRequestQr({ request, identifier, statusText, mode
   const payload = buildPaymentRequestQrPayload(request.id)
   const cells = qrCells(payload)
   const warning = mode === 'demo'
-    ? 'QR demo local. No mueve dinero real, no cobra y no confirma una solicitud.'
-    : 'QR local de ionPAY V1. No es producción, no mueve dinero, no cobra y no confirma una solicitud.'
+    ? 'QR demo local: no mueve dinero real.'
+    : 'QR local V1: no producción, no mueve dinero.'
 
   return (
     <article className={`payment-request-qr ${mode}`} aria-label={`QR local informativo para solicitud pendiente ${request.reference}`}>
@@ -64,19 +64,18 @@ export default function PaymentRequestQr({ request, identifier, statusText, mode
         {cells.map((active, index) => <i key={index} className={active ? 'active' : undefined} />)}
       </div>
       <div className="payment-request-qr-copy">
-        <span className="eyebrow">QR local ionPAY V1</span>
-        <h3>QR informativo de solicitud</h3>
-        <p className="payment-request-qr-context">Solicitud pendiente: todavía no es pago confirmado ni receipt/proof de actividad.</p>
+        <span className="eyebrow">QR local</span>
+        <h3>Solicitud informativa</h3>
         <dl>
           <div><dt>Monto</dt><dd>{money(request.amount)}</dd></div>
           <div><dt>Moneda</dt><dd>PEN</dd></div>
           <div><dt>Referencia</dt><dd>{request.reference}</dd></div>
-          <div><dt>Identificador/IonTag</dt><dd>{identifier}</dd></div>
+          <div><dt>IonTag</dt><dd>{identifier}</dd></div>
           <div><dt>Estado</dt><dd>{statusText}</dd></div>
         </dl>
         <p className="payment-request-qr-warning">{warning}</p>
         <p className="payment-request-qr-safety">
-          No paga, no confirma cobro, no es comprobante bancario, no liquida saldo, no abre scanner, no pide cámara y no sale a una red externa.
+          No paga, no confirma cobro, no es comprobante bancario, no liquida saldo, no abre scanner/cámara y no usa red externa.
         </p>
         <code>{payload}</code>
       </div>
@@ -87,11 +86,11 @@ export default function PaymentRequestQr({ request, identifier, statusText, mode
 const styles = `
 .payment-request-qr {
   display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
-  gap: 14px;
-  margin: 0 2px 14px 57px;
-  padding: 14px;
-  border-radius: 18px;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 12px;
+  margin: 0 2px 12px 0;
+  padding: 12px;
+  border-radius: 16px;
   border: 1px solid #dbe6e2;
   background: #f7fbf9;
   text-align: left;
@@ -101,17 +100,17 @@ const styles = `
   background: #fff8e8;
 }
 .payment-request-qr-code {
-  width: 112px;
-  height: 112px;
+  width: 100px;
+  height: 100px;
   display: grid;
   grid-template-columns: repeat(21, 1fr);
   grid-template-rows: repeat(21, 1fr);
   gap: 1px;
-  padding: 8px;
-  border-radius: 14px;
+  padding: 7px;
+  border-radius: 13px;
   background: #ffffff;
   border: 1px solid #d8e3de;
-  box-shadow: 0 10px 20px rgba(23, 44, 38, .07);
+  box-shadow: 0 8px 16px rgba(23, 44, 38, .06);
 }
 .payment-request-qr-code i {
   border-radius: 1px;
@@ -126,40 +125,33 @@ const styles = `
 .payment-request-qr-copy {
   min-width: 0;
   display: grid;
-  gap: 7px;
+  gap: 5px;
 }
 .payment-request-qr-copy h3 {
   margin: 0;
-  font: 800 16px/1.15 'Manrope', system-ui, sans-serif;
-  letter-spacing: -.35px;
-}
-.payment-request-qr-context {
-  margin: 0;
-  color: #52605c;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.45;
+  font: 800 14px/1.1 'Manrope', system-ui, sans-serif;
+  letter-spacing: -.3px;
 }
 .payment-request-qr-copy dl {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   margin: 0;
 }
 .payment-request-qr-copy dl div {
   display: grid;
-  grid-template-columns: minmax(86px, .72fr) minmax(0, 1.28fr);
-  gap: 10px;
+  grid-template-columns: minmax(70px, .68fr) minmax(0, 1.32fr);
+  gap: 8px;
   align-items: start;
 }
 .payment-request-qr-copy dt {
   color: #687370;
-  font-size: 10px;
+  font-size: 9.5px;
 }
 .payment-request-qr-copy dd {
   min-width: 0;
   margin: 0;
   color: #17211f;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -168,8 +160,8 @@ const styles = `
 .payment-request-qr-warning,
 .payment-request-qr-safety {
   margin: 0;
-  line-height: 1.45;
-  font-size: 10px;
+  line-height: 1.35;
+  font-size: 9.5px;
 }
 .payment-request-qr-warning {
   color: #254f49;
@@ -187,48 +179,56 @@ const styles = `
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 6px 8px;
-  border-radius: 10px;
+  padding: 5px 7px;
+  border-radius: 9px;
   color: #52605c;
   background: rgba(255,255,255,.8);
   border: 1px solid rgba(0,0,0,.05);
-  font-size: 9px;
+  font-size: 8.5px;
 }
 @media (max-width: 560px) {
   .payment-request-qr {
-    grid-template-columns: 96px minmax(0, 1fr);
-    gap: 11px;
-    margin: 0 0 13px 0;
-    padding: 12px;
-    border-radius: 16px;
+    grid-template-columns: 82px minmax(0, 1fr);
+    gap: 8px;
+    margin: 0 0 9px 0;
+    padding: 9px;
+    border-radius: 14px;
   }
   .payment-request-qr-code {
-    width: 96px;
-    height: 96px;
-    padding: 7px;
+    width: 82px;
+    height: 82px;
+    padding: 6px;
+    border-radius: 11px;
+  }
+  .payment-request-qr-copy {
+    gap: 4px;
   }
   .payment-request-qr-copy h3 {
-    font-size: 14px;
+    font-size: 12px;
+  }
+  .payment-request-qr-copy dl {
+    gap: 3px;
   }
   .payment-request-qr-copy dl div {
-    grid-template-columns: minmax(70px, .7fr) minmax(0, 1.3fr);
-    gap: 8px;
+    grid-template-columns: minmax(54px, .62fr) minmax(0, 1.38fr);
+    gap: 6px;
   }
   .payment-request-qr-copy dt,
   .payment-request-qr-copy dd,
-  .payment-request-qr-context,
   .payment-request-qr-warning,
   .payment-request-qr-safety {
-    font-size: 9px;
+    font-size: 8.5px;
   }
 }
 @media (max-width: 390px) {
   .payment-request-qr {
-    grid-template-columns: 88px minmax(0, 1fr);
+    grid-template-columns: 74px minmax(0, 1fr);
+    padding: 8px;
   }
   .payment-request-qr-code {
-    width: 88px;
-    height: 88px;
+    width: 74px;
+    height: 74px;
+    padding: 5px;
   }
 }
 `
