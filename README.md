@@ -43,6 +43,7 @@ Alcance aplicado por PR #17:
 - `src/App.tsx`;
 - `src/components/ServicesPage.tsx`;
 - `src/lib/api.ts`;
+- `src/styles.css`;
 - `src/types.ts`.
 
 No autorizado por este merge:
