@@ -62,6 +62,7 @@ Permitido y aplicado:
 - `src/App.tsx`;
 - `src/components/ServicesPage.tsx`;
 - `src/lib/api.ts`;
+- `src/styles.css`;
 - `src/types.ts`.
 
 Bloqueado salvo gate separado:
