@@ -435,6 +435,49 @@ svg { width: 22px; height: 22px; }
 .toast svg { width: 16px; color: var(--lime); }
 .mobile-nav { display: none; }
 
+/* Phase 1.6 proof system */
+.api-caption { width: min(100%, 1160px); margin: 0 auto 18px; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 14px; border: 1px solid #d9e5e2; border-radius: 14px; color: #355b55; background: #f2f8f6; font-size: 11px; font-weight: 800; }
+.api-caption svg { width: 15px; }
+.demo-pill.api i { background: #56e0ca; box-shadow: 0 0 8px #56e0ca; }
+.demo-pill.demo i { background: #f5b849; box-shadow: 0 0 8px #f5b849; }
+.activity-proof-card { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr); gap: 18px; align-items: stretch; margin: -8px 0 22px; padding: 22px; border-radius: 20px; border: 1px solid var(--line); box-shadow: 0 10px 32px rgba(31, 53, 45, .035); }
+.activity-proof-card.api { background: linear-gradient(135deg, #f6fbfa, #eef8f5); border-color: #cfe3de; }
+.activity-proof-card.demo { background: linear-gradient(135deg, #fffaf0, #fff3dd); border-color: #f0d9a8; }
+.activity-proof-card h2 { margin: 7px 0 8px; font: 800 20px/1.15 'Manrope', sans-serif; letter-spacing: -.6px; }
+.activity-proof-card p { margin: 0; color: #647170; font-size: 12px; line-height: 1.55; }
+.proof-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.proof-metrics div { display: grid; align-content: center; gap: 5px; min-width: 0; padding: 13px; border-radius: 14px; background: rgba(255,255,255,.72); border: 1px solid rgba(0,0,0,.04); }
+.proof-metrics span { color: #7b8886; font-size: 9px; text-transform: uppercase; letter-spacing: .6px; }
+.proof-metrics strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.proof-pill { width: fit-content; max-width: 100%; display: inline-flex; align-items: center; gap: 5px; padding: 4px 7px; border-radius: 999px; border: 1px solid transparent; font-size: 9px; font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; word-break: break-word; }
+.proof-pill.api { color: #115e53; background: #e6f7f3; border-color: #bce2da; }
+.proof-pill.demo { color: #8a5a05; background: #fff3d7; border-color: #f0d39a; }
+.receipt-api { border: 1px solid #cfe3de; box-shadow: 0 30px 80px rgba(6, 51, 47, .25); }
+.receipt-demo { border: 1px solid #efd59f; box-shadow: 0 30px 80px rgba(92, 61, 8, .22); }
+.receipt-proof-banner { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 11px; align-items: center; margin: 0 38px 20px 0; padding: 12px 14px; border-radius: 15px; text-align: left; }
+.receipt-proof-banner svg { width: 22px; }
+.receipt-proof-banner span { display: grid; gap: 4px; min-width: 0; }
+.receipt-proof-banner strong { font-size: 11px; line-height: 1.35; }
+.receipt-proof-banner small { font-size: 10px; line-height: 1.45; }
+.receipt-proof-banner.api { color: #155e55; background: #edf8f5; border: 1px solid #cce4df; }
+.receipt-proof-banner.demo { color: #80570b; background: #fff5dd; border: 1px solid #eed49b; }
+.status-mark { width: 58px; height: 58px; display: grid; place-items: center; border-radius: 50%; margin: 0 auto 18px; }
+.status-mark svg { width: 28px; }
+.status-mark.completed { color: #3c6e00; background: #e8f7d3; }
+.status-mark.neutral { color: #4b5960; background: #eef2f0; }
+.status-mark.demo.neutral { color: #85600f; background: #fff3d1; }
+.receipt-status-label { display: inline-flex; align-items: center; justify-content: center; min-height: 28px; margin: -14px auto 14px; padding: 0 12px; border-radius: 999px; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .7px; }
+.receipt-status-label.completed { color: #2f6500; background: #e8f7d3; }
+.receipt-status-label.neutral { color: #4e5b61; background: #edf1ef; }
+.proof-details div { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(0, 1.2fr); align-items: start; }
+.proof-details strong { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+.receipt-warning { display: grid; gap: 4px; margin: -4px 0 18px; padding: 13px 14px; border-radius: 14px; text-align: left; color: #536064; background: #f5f7f6; border: 1px solid #e2e7e4; }
+.receipt-warning strong { color: #2e383b; font-size: 11px; }
+.receipt-warning span { font-size: 10px; line-height: 1.45; }
+.request-pay-list { padding: 0; margin-top: 14px; }
+.request-pay-list .transaction-row { grid-template-columns: 42px minmax(0, 1fr) auto minmax(96px, auto); }
+.request-pay-list .secondary-button { min-height: 40px; padding: 0 14px; }
+
 @keyframes fade { from { opacity: 0; } }
 @keyframes rise { from { opacity: 0; transform: translateY(12px); } }
 
@@ -471,6 +514,11 @@ svg { width: 22px; height: 22px; }
   .topbar > div { padding-top: 40px; position: relative; }
   .cards-layout, .profile-grid, .services-grid { grid-template-columns: 1fr; }
   .virtual-card { width: 100%; max-width: 520px; }
+  .activity-proof-card { grid-template-columns: 1fr; }
+  .proof-metrics { grid-template-columns: 1fr 1fr 1fr; }
+  .request-pay-list .transaction-row { grid-template-columns: 38px minmax(0, 1fr); }
+  .request-pay-list .transaction-amount { grid-column: 2; text-align: left; }
+  .request-pay-list .secondary-button { grid-column: 2; width: 100%; }
 }
 
 @media (max-width: 560px) {
@@ -516,6 +564,29 @@ svg { width: 22px; height: 22px; }
   .modal-backdrop { align-items: end; padding: 0; }
   .modal { width: 100%; max-height: 92vh; border-radius: 25px 25px 0 0; padding: 30px 23px calc(30px + env(safe-area-inset-bottom)); }
   .qr-code { width: 210px; height: 210px; }
+  .api-caption { margin-bottom: 14px; padding: 9px 12px; font-size: 10px; line-height: 1.35; }
+  .activity-proof-card { margin: -4px 0 17px; padding: 16px; border-radius: 17px; }
+  .activity-proof-card h2 { font-size: 16px; }
+  .activity-proof-card p { font-size: 10px; }
+  .proof-metrics { grid-template-columns: 1fr; }
+  .proof-metrics div { padding: 11px; }
+  .proof-pill { max-width: 100%; white-space: normal; font-size: 8px; padding: 4px 6px; }
+  .proof-row { grid-template-columns: 38px minmax(0, 1fr) minmax(76px, auto); }
+  .receipt-proof-banner { grid-template-columns: 28px minmax(0, 1fr); margin-right: 36px; padding: 10px 11px; }
+  .receipt-proof-banner svg { width: 18px; }
+  .receipt-proof-banner strong { font-size: 10px; }
+  .receipt-proof-banner small { font-size: 9px; }
+  .status-mark { width: 50px; height: 50px; margin-bottom: 15px; }
+  .status-mark svg { width: 23px; }
+  .receipt h2 { font-size: 22px; }
+  .receipt-amount { font-size: 27px; margin-bottom: 18px; }
+  .proof-details div { grid-template-columns: minmax(82px, .75fr) minmax(0, 1.25fr); gap: 12px; }
+  .receipt-details strong { font-size: 10px; }
+  .receipt-warning { padding: 11px 12px; }
+  .request-pay-list .transaction-row { grid-template-columns: 36px minmax(0, 1fr); gap: 9px; align-items: start; }
+  .request-pay-list .transaction-main { min-width: 0; }
+  .request-pay-list .transaction-amount { grid-column: 2; text-align: left; }
+  .request-pay-list .secondary-button { grid-column: 2; min-height: 38px; margin-top: 4px; }
 }
 
 /* Mobile visual system based on the approved IONPAY references */
@@ -592,4 +663,10 @@ svg { width: 22px; height: 22px; }
   .profile-section-label { margin-top: 16px; }
   .settings-screen .profile-screen-header, .devices-screen .profile-screen-header { margin-top: -4px; }
   .services-page .page-heading, .page-section > .page-heading { margin-bottom: 22px; }
+  .activity-proof-card { grid-template-columns: 1fr; }
+  .proof-metrics { grid-template-columns: 1fr; }
+  .proof-pill { white-space: normal; }
+  .proof-row { grid-template-columns: 34px minmax(0, 1fr) minmax(72px, auto); }
+  .request-pay-list .transaction-row { grid-template-columns: 34px minmax(0, 1fr); }
+  .request-pay-list .transaction-amount, .request-pay-list .secondary-button { grid-column: 2; }
 }
