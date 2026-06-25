@@ -670,3 +670,20 @@ svg { width: 22px; height: 22px; }
   .request-pay-list .transaction-row { grid-template-columns: 34px minmax(0, 1fr); }
   .request-pay-list .transaction-amount, .request-pay-list .secondary-button { grid-column: 2; }
 }
+
+.transaction-row.receipt-unavailable {
+  opacity: .62;
+}
+
+.transaction-row.receipt-unavailable:hover {
+  background: transparent;
+}
+
+.transaction-row.receipt-unavailable:disabled {
+  opacity: .62;
+}
+
+.proof-pill.unavailable {
+  color: #8f6f00;
+  background: #fff7d6;
+}
