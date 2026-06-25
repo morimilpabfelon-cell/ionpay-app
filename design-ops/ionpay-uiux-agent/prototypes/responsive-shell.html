@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ionPAY UIUX Responsive Prototype</title>
+    <style>
+      :root {
+        --bg: #f4f6f0;
+        --surface: #ffffff;
+        --ink: #0a0a0b;
+        --muted: #747a76;
+        --line: #dce0d8;
+        --lime: #b6ff14;
+        --danger: #dc2f45;
+        --radius: 24px;
+        --font: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font); }
+      .workspace { padding: 24px; display: grid; gap: 24px; }
+      .device { width: min(100%, 390px); min-height: 844px; margin: 0 auto; background: var(--surface); border: 1px solid var(--line); border-radius: 28px; padding: 24px; display: grid; gap: 20px; align-content: start; }
+      .top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 800; }
+      .title h1 { margin: 0; font-size: 28px; letter-spacing: -0.04em; }
+      .title p { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
+      .balance { background: var(--ink); color: white; border-radius: var(--radius); padding: 24px; min-height: 168px; display: grid; align-content: space-between; }
+      .balance .label { color: #d7ded0; font-size: 12px; }
+      .balance .amount { font-size: 36px; font-weight: 900; letter-spacing: -0.06em; }
+      .balance .meta { color: var(--lime); font-size: 12px; }
+      .actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+      .action { border: 1px solid var(--line); border-radius: 18px; padding: 10px 6px; min-height: 80px; text-align: center; display: grid; place-items: center; gap: 6px; }
+      .icon { width: 40px; height: 40px; border-radius: 14px; background: var(--lime); display: grid; place-items: center; font-size: 11px; font-weight: 900; }
+      .action span { font-size: 10px; font-weight: 800; }
+      .section-title { font-size: 16px; font-weight: 900; margin-top: 10px; }
+      .proof { border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+      .proof strong { font-size: 12px; }
+      .button { border: 0; background: var(--ink); color: white; border-radius: 16px; padding: 15px 18px; font-weight: 900; font-size: 14px; }
+      .terminal { background: #0c0e0f; color: var(--lime); border-radius: 0; padding: 18px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; line-height: 1.7; }
+      .risk { color: var(--muted); font-size: 11px; line-height: 1.4; }
+      @media (min-width: 760px) {
+        .workspace { grid-template-columns: 1fr; padding: 32px; }
+        .device { width: min(100%, 768px); min-height: 1024px; grid-template-columns: 1fr 1fr; align-items: start; }
+        .top, .title, .section-title, .risk { grid-column: 1 / -1; }
+        .actions { grid-template-columns: repeat(2, 1fr); }
+      }
+      @media (min-width: 1000px) {
+        .device { width: min(100%, 1024px); min-height: 768px; grid-template-columns: 380px 1fr; }
+        .top, .title { grid-column: 1 / -1; }
+        .balance { min-height: 220px; }
+        .section-title { grid-column: 2; margin: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="workspace">
+      <section class="device" aria-label="ionPAY responsive design prototype">
+        <div class="top"><span>ionPAY</span><span>9:41</span></div>
+        <div class="title">
+          <h1>Wallet</h1>
+          <p>Design-only responsive prototype. No backend, no real money.</p>
+        </div>
+
+        <article class="balance">
+          <div class="label">Saldo disponible</div>
+          <div class="amount">S/ 2,840.60</div>
+          <div class="meta">PEN wallet · backend truth required</div>
+        </article>
+
+        <nav class="actions" aria-label="Primary actions">
+          <div class="action"><div class="icon">PA</div><span>Pagar</span></div>
+          <div class="action"><div class="icon">CO</div><span>Cobrar</span></div>
+          <div class="action"><div class="icon">EN</div><span>Enviar</span></div>
+          <div class="action"><div class="icon">HI</div><span>Historial</span></div>
+        </nav>
+
+        <div class="section-title">Proof states</div>
+        <div class="proof"><span>Trace ID ready</span><strong>VISIBLE</strong></div>
+        <div class="proof"><span>Receipt state</span><strong>PENDING</strong></div>
+        <div class="proof"><span>False success guard</span><strong>BLOCKED</strong></div>
+
+        <pre class="terminal">+------------------------------+
+| IONPAY RECEIPT PROOF         |
++------------------------------+
+STATE=DESIGN_ONLY
+AMOUNT=S/ 18.50
+TRACE=ION-DESIGN
+VERIFY=VISIBLE
+FALSE_SUCCESS=BLOCKED</pre>
+
+        <button class="button">Continuar</button>
+        <p class="risk">This prototype is a UI/UX artifact. It does not authorize production implementation, payment execution, ledger changes or wallet balance behavior.</p>
+      </section>
+    </main>
+  </body>
+</html>
