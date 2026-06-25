@@ -37,7 +37,9 @@ This folder contains:
 - local Figma plugin MVP;
 - static responsive prototype;
 - external UI UX Pro Max adapter;
+- external How to Train Your GPT adapter;
 - ionPAY fintech profile based on UI UX Pro Max;
+- agent training workspace;
 - starter core pack;
 - starter ASCII pack.
 
@@ -65,11 +67,32 @@ The external project is used as a reference for design reasoning, fintech style 
 
 It is not installed as a runtime app dependency.
 
+## External agent-training reference now incorporated
+
+The founder provided:
+
+```text
+https://github.com/raiyanyahya/how-to-train-your-gpt
+```
+
+This has been incorporated as a controlled reference layer for progressive agent-training structure.
+
+Added files:
+
+- `external-skills/HOW_TO_TRAIN_YOUR_GPT_ADAPTER.md`
+- `agent-training/README.md`
+- `agent-training/00-overview.md`
+- `agent-training/glossary.md`
+
+This reference is not used to train a production machine learning model. It is used to structure how agents learn ionPAY: overview, modules, components, examples, glossary, full-system walkthroughs and validation.
+
 ## Why this exists
 
 Figma MCP tool calls were repeatedly blocked by rate limits and safety filters. The plugin moves bulk design generation into a local Figma plugin, avoiding dependence on ChatGPT-to-Figma MCP calls for large screen sets.
 
 The code-driven design layer also makes ionPAY design executable as tokens, specs and prototypes before production implementation.
+
+The agent-training layer makes the design system easier for agents to learn, audit and hand off.
 
 ## Founder clarification now incorporated
 
@@ -83,7 +106,8 @@ The actual responsibility is:
 - show how the product adapts across compact phones, standard Android, large phones and tablets;
 - maintain separation between design artifacts and app implementation;
 - keep other agents in observe/read mode unless routed;
-- maintain design as code where useful, without touching production logic.
+- maintain design as code where useful, without touching production logic;
+- maintain agent-training documentation so the design system can be understood consistently.
 
 ## Current plugin status
 
@@ -154,7 +178,7 @@ Other agents must not change design packs, generate design direction or run visu
 
 - Financial risk: low while kept as design tooling.
 - Product risk: medium if mistaken as implementation authorization.
-- Mitigation: folder isolation, policy file, design scope document, implementation bridge, external skill adapter and PR draft classification.
+- Mitigation: folder isolation, policy file, design scope document, implementation bridge, external skill adapters, agent training and PR draft classification.
 
 ## Required gates before app implementation
 
@@ -175,4 +199,5 @@ Generated screens, tokens, component specs and coded prototypes require normal g
 4. Add design notes per module: phone, tablet, risk, false-success prevention.
 5. Expand the static prototype into multiple module prototypes.
 6. Use the UUPM ionPAY profile when selecting styles, tokens, responsive rules and component specs.
-7. Keep the PR draft until the founder confirms the operation center structure.
+7. Expand `agent-training/` with module-by-module lessons.
+8. Keep the PR draft until the founder confirms the operation center structure.
