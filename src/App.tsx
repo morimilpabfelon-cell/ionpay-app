@@ -159,7 +159,7 @@ function TransactionIcon({ kind }: { kind: TransactionKind }) {
 function TransactionRow({ item, mode, onOpen }: { item: Transaction; mode: ProofMode; onOpen: () => void }) {
   const sign = item.direction === 'in' ? '+' : item.direction === 'out' ? '−' : ''
   return (
-    <button className="transaction-row proof-row" onClick={onOpen} aria-label={`Abrir comprobante ${item.id}`}>
+    <button className="transaction-row proof-row" onClick={onOpen} aria-label={`Abrir registro de actividad ${item.id}`}>
       <TransactionIcon kind={item.kind} />
       <span className="transaction-main">
         <strong>{item.counterpart}</strong>
@@ -215,7 +215,7 @@ function Home({ state, mode, setAction, setTab, openReceipt }: { state: IonState
           <section className="quick-actions" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>{actions.map(({ id, label, Icon, run }) => <button key={id} onClick={run}><span><Icon /></span><strong>{label}</strong></button>)}</section>
           <section className="section-card activity-preview"><div className="section-title"><div><span className="eyebrow">Movimientos</span><h2>Actividad reciente</h2></div><button onClick={() => setTab('activity')}>Ver todo <ChevronIcon /></button></div><div>{transactions.length ? transactions.slice(0, 4).map((item) => <TransactionRow key={item.id} item={item} mode={mode} onOpen={() => openReceipt(item)} />) : <EmptyActivity />}</div></section>
         </div>
-        <aside className="home-aside"><section className="account-status"><div className="section-title compact"><div><span className="eyebrow">Tu cuenta</span><h2>Estado</h2></div><ShieldIcon /></div><div className="status-row"><span className={`status-dot ${state.user!.kycStatus === 'Verificado' ? 'verified' : ''}`}><CheckIcon /></span><div><strong>Identidad {state.user!.kycStatus === 'Verificado' ? 'verificada' : 'pendiente'}</strong><small>{state.user!.kycStatus === 'Verificado' ? 'Tu cuenta está lista para operar' : 'Verificación pendiente para futuras funciones'}</small></div></div><div className="notice-box"><strong>V1 enfocada en pagos internos</strong><p>Saldo fiat PEN, envíos, cobros, solicitudes de pago, historial y comprobantes confirmados.</p></div></section></aside>
+        <aside className="home-aside"><section className="account-status"><div className="section-title compact"><div><span className="eyebrow">Tu cuenta</span><h2>Estado</h2></div><ShieldIcon /></div><div className="status-row"><span className={`status-dot ${state.user!.kycStatus === 'Verificado' ? 'verified' : ''}`}><CheckIcon /></span><div><strong>Identidad {state.user!.kycStatus === 'Verificado' ? 'verificada' : 'pendiente'}</strong><small>{state.user!.kycStatus === 'Verificado' ? 'Tu cuenta está lista para operar' : 'Verificación pendiente para futuras funciones'}</small></div></div><div className="notice-box"><strong>V1 enfocada en pagos internos</strong><p>Saldo fiat PEN, envíos, cobros, solicitudes de pago, historial y registros internos de actividad.</p></div></section></aside>
       </div>
     </>
   )
@@ -248,7 +248,7 @@ function ProfilePage({ user, onReset, logoutLabel }: { user: IonUser; onReset: (
       <div className="profile-identity"><div className="avatar">{user.name.split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase()}</div><div><h2>{user.name}</h2><span><ShieldIcon /> Cuenta {user.kycStatus === 'Verificado' ? 'verificada' : 'pendiente'}</span></div></div>
       <section className="profile-info-card"><div><UserIcon /><span><small>IonTag</small><strong>@{user.alias}</strong></span></div><div><ShieldIcon /><span><small>Estado KYC</small><strong>{user.kycStatus}</strong></span></div></section>
       <span className="profile-section-label">Cuenta V1</span>
-      <section className="profile-menu-card"><div className="profile-menu-row"><span className="profile-row-icon"><ActivityIcon /></span><span className="profile-row-copy"><strong>Historial</strong><small>Movimientos y comprobantes backend</small></span><span className="profile-row-value">Disponible</span><ChevronIcon /></div><div className="profile-menu-row"><span className="profile-row-icon"><ReceiveIcon /></span><span className="profile-row-copy"><strong>Cobros básicos</strong><small>Solicitudes de pago en PEN</small></span><span className="profile-row-value">V1</span><ChevronIcon /></div></section>
+      <section className="profile-menu-card"><div className="profile-menu-row"><span className="profile-row-icon"><ActivityIcon /></span><span className="profile-row-copy"><strong>Historial</strong><small>Movimientos y registros internos</small></span><span className="profile-row-value">Disponible</span><ChevronIcon /></div><div className="profile-menu-row"><span className="profile-row-icon"><ReceiveIcon /></span><span className="profile-row-copy"><strong>Cobros básicos</strong><small>Solicitudes de pago en PEN</small></span><span className="profile-row-value">V1</span><ChevronIcon /></div></section>
       <button className="profile-logout" onClick={onReset}><LogoutIcon /> {logoutLabel}</button>
     </section>
   )
@@ -345,17 +345,21 @@ function ReceivePanel({ user }: { user: IonUser }) {
 
 function ReceiptModal({ item, mode, onClose }: { item: Transaction; mode: ProofMode; onClose: () => void }) {
   const sign = item.direction === 'in' ? '+' : item.direction === 'out' ? '−' : ''
-  const proofTitle = mode === 'api' ? 'Confirmación backend' : 'Simulación demo'
-  const proofDescription = proofDetail(mode)
+  const isCompleted = item.status === 'Completado'
+  const proofTitle = mode === 'api' ? 'API local · no es comprobante bancario ni release de producción' : 'Demo local · no mueve dinero real'
+  const proofDescription = mode === 'api'
+    ? 'Registro de actividad confirmado por backend local dentro de ionPAY V1.'
+    : 'Registro de actividad generado por demo local para revisión visual.'
 
   return (
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className={`modal receipt receipt-${mode}`} role="dialog" aria-modal="true" aria-label={`Comprobante ${item.id}`}>
+      <section className={`modal receipt receipt-${mode}`} role="dialog" aria-modal="true" aria-label={`Registro de actividad ${item.id}`}>
         <button className="modal-close" onClick={onClose}><CloseIcon /></button>
         <div className={`receipt-proof-banner ${mode}`}><ShieldIcon /><span><strong>{proofTitle}</strong><small>{proofDescription}</small></span></div>
-        <div className={`success-mark ${mode}`}><CheckIcon /></div>
-        <span className="eyebrow">Ion Receipt · {proofLabel(mode)}</span>
-        <h2>{item.status}</h2>
+        <div className={`status-mark ${isCompleted ? 'completed' : 'neutral'} ${mode}`}>{isCompleted ? <CheckIcon /> : <ShieldIcon />}</div>
+        <span className="eyebrow">Activity proof · {proofLabel(mode)}</span>
+        <h2>Registro de actividad</h2>
+        <div className={`receipt-status-label ${isCompleted ? 'completed' : 'neutral'}`}>{item.status}</div>
         <div className={`receipt-amount ${item.direction}`}>{sign}{money(item.amount, item.currency)}</div>
         <div className="receipt-details proof-details">
           <div><span>Estado</span><strong>{item.status}</strong></div>
@@ -368,8 +372,8 @@ function ReceiptModal({ item, mode, onClose }: { item: Transaction; mode: ProofM
           <div><span>Referencia</span><strong>{item.id}</strong></div>
           {item.note && <div><span>Nota</span><strong>{item.note}</strong></div>}
         </div>
-        <div className="receipt-warning"><strong>{mode === 'api' ? 'Activity proof' : 'Demo proof'}</strong><span>{mode === 'api' ? 'Este comprobante se abrió desde actividad recargada o referencia encontrada en backend.' : 'Este comprobante pertenece solo al modo demo y no prueba movimiento financiero real.'}</span></div>
-        <button className="secondary-button" onClick={onClose}>Cerrar comprobante</button>
+        <div className="receipt-warning"><strong>Recibo interno ionPAY V1</strong><span>{mode === 'api' ? 'No es comprobante bancario ni release de producción.' : 'Demo local: no prueba movimiento financiero real.'}</span></div>
+        <button className="secondary-button" onClick={onClose}>Cerrar registro</button>
       </section>
     </div>
   )
@@ -393,7 +397,7 @@ export default function App() {
   const moneyOperationInFlight = useRef(false)
 
   const flash = (message: string, variant: 'success' | 'error' = 'success') => {
-    setToast({ message, variant })
+    setToast({ message: variant === 'success' ? message.replace('confirmada', 'registrada') : message, variant })
     window.setTimeout(() => setToast(null), 2600)
   }
 
@@ -487,7 +491,7 @@ export default function App() {
         setReceipt(confirmed)
         flash(`${successMessage}: ${confirmed.status}`)
       } else {
-        flash('Backend registró la operación. Actividad recargada sin comprobante local.')
+        flash('Backend registró la operación. Actividad recargada sin registro local.')
       }
     } finally {
       setProcessing(false)
@@ -563,7 +567,7 @@ export default function App() {
       <Sidebar tab={tab} setTab={setTab} mode={proofMode} />
       <main className="app-content">
         {mode === 'demo' && <div className="demo-caption">Modo demo · fondos simulados · no mueve dinero real</div>}
-        {mode === 'api' && <div className="api-caption"><ShieldIcon /> API local · actividad y receipts dependen de backend</div>}
+        {mode === 'api' && <div className="api-caption"><ShieldIcon /> API local · actividad y registros dependen de backend</div>}
         {tab === 'home' && <Home state={state} mode={proofMode} setAction={setAction} setTab={setTab} openReceipt={setReceipt} />}
         {tab === 'activity' && <ActivityPage transactions={state.transactions} mode={proofMode} openReceipt={setReceipt} />}
         {tab === 'services' && <ServicesPage state={state} paymentRequests={paymentRequests} openAction={(next) => setAction(next)} onPayRequest={payPaymentRequestFromServices} onCancelRequest={cancelPaymentRequestFromServices} processingRequestId={processingRequestId} requestOperationPending={Boolean(processingRequestId)} />}
