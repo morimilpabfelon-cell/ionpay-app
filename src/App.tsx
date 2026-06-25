@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   ActivityIcon,
   ArrowDownIcon,
@@ -11,34 +11,29 @@ import {
   CopyIcon,
   EyeIcon,
   EyeOffIcon,
-  GlobeIcon,
   GridIcon,
-  HelpIcon,
   HomeIcon,
-  KeyIcon,
-  LaptopIcon,
-  LocationIcon,
-  LockIcon,
   LogoutIcon,
-  MoreIcon,
   PayIcon,
-  PhoneIcon,
   ReceiveIcon,
   SearchIcon,
   SendIcon,
-  SettingsIcon,
   ShieldIcon,
   UserIcon,
-  DeviceIcon,
 } from './components/Icons'
 import Onboarding from './components/Onboarding'
 import ServicesPage from './components/ServicesPage'
-import { api, IonPayApiError } from './lib/api'
+import { api, IonPayApiError, type MoneyOperationResponse } from './lib/api'
 import { clearState, demoState, loadState, saveState } from './lib/storage'
-import type { Currency, IonState, IonUser, Transaction, TransactionKind, User } from './types'
+import type { Currency, IonState, IonUser, PaymentRequest, Transaction, TransactionKind, User } from './types'
 
 type Tab = 'home' | 'activity' | 'services' | 'profile'
 type Action = 'send' | 'receive' | 'pay' | null
+type AppMode = 'checking' | 'signed-out' | 'api' | 'demo'
+type PaymentRequestState = { received: PaymentRequest[]; created: PaymentRequest[] }
+type ToastState = { message: string; variant: 'success' | 'error' } | null
+
+const emptyPaymentRequests: PaymentRequestState = { received: [], created: [] }
 
 const QR_BITS = '111111101010111111110100001001010100000110111010111011101101011101010101110110101110111011101101011101000101010100010001111111101010111111110000000101010000000010101011101110101010101110100011010001110010011011101101010110101000111001011110010111010011101000101110101011100011001010001000101111111101011101001011000001010100101001011111110100111001010110000101011100110101000001111111101010101111111'.split('')
 
@@ -65,6 +60,21 @@ function v1Transactions(transactions: Transaction[]) {
   return transactions.filter((item) => item.currency === 'PEN' && item.kind !== 'conversion')
 }
 
+function errorMessage(cause: unknown, fallback: string) {
+  return cause instanceof IonPayApiError ? cause.message : fallback
+}
+
+function validAmount(value: string) {
+  const trimmed = value.trim()
+  return /^[0-9]+(?:\.[0-9]{1,2})?$/.test(trimmed) && Number(trimmed) > 0
+}
+
+function confirmedTransaction(transactions: Transaction[], response: MoneyOperationResponse) {
+  const reference = response.transaction?.reference
+  if (!reference) return null
+  return transactions.find((transaction) => transaction.id === reference) ?? null
+}
+
 function Logo({ compact = false }: { compact?: boolean }) {
   return (
     <div className={`brand ${compact ? 'compact' : ''}`} aria-label="ionPAY">
@@ -80,6 +90,7 @@ function Sidebar({ tab, setTab, mode }: { tab: Tab; setTab: (tab: Tab) => void; 
     ['services', 'Cobros', GridIcon],
     ['profile', 'Perfil', UserIcon],
   ]
+
   return (
     <aside className="sidebar">
       <Logo />
@@ -99,10 +110,7 @@ function BalanceCard({ state, visible, setVisible }: { state: IonState; visible:
     <section className="balance-card">
       <div className="balance-top"><span>Saldo disponible</span><button onClick={() => setVisible(!visible)} aria-label={visible ? 'Ocultar saldo' : 'Mostrar saldo'}>{visible ? <EyeIcon /> : <EyeOffIcon />}</button></div>
       <div className="main-balance">{visible ? money(state.wallet.pen, 'PEN') : 'S/ ••••••'}</div>
-      <div className="balance-meta">
-        <div><span>Wallet ionPAY V1</span><strong>Saldo fiat local</strong></div>
-      </div>
-      <div className="card-glow" />
+      <div className="balance-meta"><div><span>Wallet ionPAY V1</span><strong>Saldo fiat local</strong></div></div>
     </section>
   )
 }
@@ -124,6 +132,10 @@ function TransactionRow({ item, onOpen }: { item: Transaction; onOpen: () => voi
   )
 }
 
+function EmptyActivity() {
+  return <div className="empty-state"><ActivityIcon /><strong>Aún no hay movimientos</strong><span>Tus operaciones aparecerán aquí.</span></div>
+}
+
 function Home({ state, setAction, setTab, openReceipt }: { state: IonState; setAction: (action: Action) => void; setTab: (tab: Tab) => void; openReceipt: (item: Transaction) => void }) {
   const [visible, setVisible] = useState(true)
   const firstName = state.user!.name.split(' ')[0]
@@ -134,35 +146,20 @@ function Home({ state, setAction, setTab, openReceipt }: { state: IonState; setA
     { id: 'pay', label: 'Pagar', Icon: PayIcon, run: () => setAction('pay') },
     { id: 'activity', label: 'Actividad', Icon: ActivityIcon, run: () => setTab('activity') },
   ]
+
   return (
     <>
-      <header className="topbar">
-        <div><span className="mobile-brand"><Logo /></span><p>Hola, {firstName}</p><h1>Tu dinero, bajo control.</h1></div>
-        <button className="notification"><BellIcon /><i /></button>
-      </header>
+      <header className="topbar"><div><span className="mobile-brand"><Logo /></span><p>Hola, {firstName}</p><h1>Tu dinero, bajo control.</h1></div><button className="notification"><BellIcon /><i /></button></header>
       <div className="home-grid">
         <div>
           <BalanceCard state={state} visible={visible} setVisible={setVisible} />
           <section className="quick-actions" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>{actions.map(({ id, label, Icon, run }) => <button key={id} onClick={run}><span><Icon /></span><strong>{label}</strong></button>)}</section>
-          <section className="section-card activity-preview">
-            <div className="section-title"><div><span className="eyebrow">Movimientos</span><h2>Actividad reciente</h2></div><button onClick={() => setTab('activity')}>Ver todo <ChevronIcon /></button></div>
-            <div>{transactions.length ? transactions.slice(0, 4).map((item) => <TransactionRow key={item.id} item={item} onOpen={() => openReceipt(item)} />) : <EmptyActivity />}</div>
-          </section>
+          <section className="section-card activity-preview"><div className="section-title"><div><span className="eyebrow">Movimientos</span><h2>Actividad reciente</h2></div><button onClick={() => setTab('activity')}>Ver todo <ChevronIcon /></button></div><div>{transactions.length ? transactions.slice(0, 4).map((item) => <TransactionRow key={item.id} item={item} onOpen={() => openReceipt(item)} />) : <EmptyActivity />}</div></section>
         </div>
-        <aside className="home-aside">
-          <section className="account-status">
-            <div className="section-title compact"><div><span className="eyebrow">Tu cuenta</span><h2>Estado</h2></div><MoreIcon /></div>
-            <div className="status-row"><span className={`status-dot ${state.user!.kycStatus === 'Verificado' ? 'verified' : ''}`}><CheckIcon /></span><div><strong>Identidad {state.user!.kycStatus === 'Verificado' ? 'verificada' : 'pendiente'}</strong><small>{state.user!.kycStatus === 'Verificado' ? 'Tu cuenta está lista para operar' : 'Verificación pendiente para futuras funciones'}</small></div></div>
-            <div className="notice-box"><strong>V1 enfocada en pagos internos</strong><p>Esta versión prioriza saldo fiat, envíos, cobros, pagos, historial y comprobantes.</p></div>
-          </section>
-        </aside>
+        <aside className="home-aside"><section className="account-status"><div className="section-title compact"><div><span className="eyebrow">Tu cuenta</span><h2>Estado</h2></div><ShieldIcon /></div><div className="status-row"><span className={`status-dot ${state.user!.kycStatus === 'Verificado' ? 'verified' : ''}`}><CheckIcon /></span><div><strong>Identidad {state.user!.kycStatus === 'Verificado' ? 'verificada' : 'pendiente'}</strong><small>{state.user!.kycStatus === 'Verificado' ? 'Tu cuenta está lista para operar' : 'Verificación pendiente para futuras funciones'}</small></div></div><div className="notice-box"><strong>V1 enfocada en pagos internos</strong><p>Saldo fiat PEN, envíos, cobros, solicitudes de pago, historial y comprobantes confirmados.</p></div></section></aside>
       </div>
     </>
   )
-}
-
-function EmptyActivity() {
-  return <div className="empty-state"><ActivityIcon /><strong>Aún no hay movimientos</strong><span>Tus operaciones aparecerán aquí.</span></div>
 }
 
 function ActivityPage({ transactions, openReceipt }: { transactions: Transaction[]; openReceipt: (item: Transaction) => void }) {
@@ -174,119 +171,103 @@ function ActivityPage({ transactions, openReceipt }: { transactions: Transaction
     const term = query.toLowerCase()
     return matchesFilter && (`${item.counterpart} ${item.title} ${item.id}`).toLowerCase().includes(term)
   }), [visibleTransactions, query, filter])
+
   return (
     <section className="page-section">
-      <div className="page-heading"><span className="eyebrow">Ion Activity</span><h1>Tu actividad</h1><p>Consulta, filtra y verifica cada movimiento V1 de tu cuenta.</p></div>
-      <div className="activity-tools">
-        <label className="search-box"><SearchIcon /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar movimiento" /></label>
-        <div className="filter-chips">{([['all', 'Todos'], ['receive', 'Recibidos'], ['send', 'Enviados'], ['payment', 'Pagos']] as const).map(([id, label]) => <button key={id} className={filter === id ? 'active' : ''} onClick={() => setFilter(id)}>{label}</button>)}</div>
-      </div>
+      <div className="page-heading"><span className="eyebrow">Ion Activity</span><h1>Tu actividad</h1><p>Consulta, filtra y verifica cada movimiento V1 confirmado por backend.</p></div>
+      <div className="activity-tools"><label className="search-box"><SearchIcon /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar movimiento" /></label><div className="filter-chips">{([['all', 'Todos'], ['receive', 'Recibidos'], ['send', 'Enviados'], ['payment', 'Pagos']] as const).map(([id, label]) => <button key={id} className={filter === id ? 'active' : ''} onClick={() => setFilter(id)}>{label}</button>)}</div></div>
       <div className="section-card full-list">{filtered.length ? filtered.map((item) => <TransactionRow key={item.id} item={item} onOpen={() => openReceipt(item)} />) : <EmptyActivity />}</div>
     </section>
   )
 }
 
-function ProfileRow({ Icon, title, detail, value, onClick }: { Icon: typeof HomeIcon; title: string; detail?: string; value?: string; onClick?: () => void }) {
-  return <button className="profile-menu-row" onClick={onClick}><span className="profile-row-icon"><Icon /></span><span className="profile-row-copy"><strong>{title}</strong>{detail && <small>{detail}</small>}</span>{value && <span className="profile-row-value">{value}</span>}<ChevronIcon /></button>
-}
-
-function ScreenHeader({ title, back, settings }: { title: string; back?: () => void; settings?: () => void }) {
-  return <header className="profile-screen-header">{back ? <button aria-label="Volver" onClick={back}>←</button> : <span />}<h1>{title}</h1>{settings ? <button aria-label="Ajustes" onClick={settings}><SettingsIcon /></button> : <span />}</header>
-}
-
 function ProfilePage({ user, onReset, logoutLabel }: { user: IonUser; onReset: () => void; logoutLabel: string }) {
-  const [screen, setScreen] = useState<'profile' | 'settings' | 'devices'>('profile')
-  const [trusted, setTrusted] = useState(true)
-  const [biometric, setBiometric] = useState(true)
-  const [alerts, setAlerts] = useState(true)
-  const initials = user.name.split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase()
-
-  if (screen === 'settings') return <section className="page-section profile-page settings-screen"><div className="profile-logo"><Logo /></div><ScreenHeader title="Ajustes" back={() => setScreen('profile')} /><div className="settings-groups"><div><span className="profile-section-label">Cuenta</span><section className="profile-menu-card"><ProfileRow Icon={UserIcon} title="Información personal" detail="Consulta tus datos básicos" /><ProfileRow Icon={ShieldIcon} title="Estado de verificación" detail={user.kycStatus} /></section></div><div><span className="profile-section-label">Seguridad</span><section className="profile-menu-card"><ProfileRow Icon={LockIcon} title="Contraseña y biometría" detail="Administra tu acceso seguro" onClick={() => setScreen('devices')} /></section></div><div><span className="profile-section-label">Notificaciones</span><section className="profile-menu-card"><ProfileRow Icon={BellIcon} title="Preferencias de notificación" detail="Elige qué alertas quieres recibir" /></section></div><div><span className="profile-section-label">Idioma y región</span><section className="profile-menu-card"><ProfileRow Icon={GlobeIcon} title="Idioma" value="Español" /><ProfileRow Icon={LocationIcon} title="Región" value="Perú" /></section></div><div><span className="profile-section-label">Privacidad</span><section className="profile-menu-card"><ProfileRow Icon={ShieldIcon} title="Controles de privacidad" detail="Administra tus datos y permisos" /></section></div><div><span className="profile-section-label">Soporte</span><section className="profile-menu-card"><ProfileRow Icon={HelpIcon} title="Centro de ayuda" detail="Encuentra respuestas y soporte" /></section></div></div></section>
-
-  if (screen === 'devices') return <section className="page-section profile-page devices-screen"><div className="profile-logo"><Logo /></div><ScreenHeader title="Dispositivos" back={() => setScreen('profile')} /><p className="screen-description">Administra los dispositivos que tienen acceso a tu cuenta.</p><span className="profile-section-label">Este dispositivo</span><section className="profile-menu-card device-card"><span className="device-icon"><DeviceIcon /></span><span><strong>Este Android</strong><small>IONPAY App · Lima, Perú</small></span><i>Activo ahora</i><ChevronIcon /></section><span className="profile-section-label">Otros dispositivos conectados</span><section className="profile-menu-card"><ProfileRow Icon={LaptopIcon} title="Chrome en Windows" detail="Lima, Perú" value="Hace 2 h" /><ProfileRow Icon={DeviceIcon} title="Samsung Galaxy S23" detail="Arequipa, Perú" value="Hace 1 d" /></section><span className="profile-section-label">Controles de seguridad</span><section className="profile-menu-card device-controls"><ToggleProfileRow Icon={ShieldIcon} title="Dispositivo confiable" detail="Reduce verificaciones en este equipo" value={trusted} setValue={setTrusted} /><ToggleProfileRow Icon={UserIcon} title="Acceso biométrico" detail="Usa huella o reconocimiento facial" value={biometric} setValue={setBiometric} /><ToggleProfileRow Icon={BellIcon} title="Alertas de sesión" detail="Avisa sobre nuevos accesos" value={alerts} setValue={setAlerts} /></section><button className="manage-sessions"><LockIcon /><span><strong>Administrar sesiones</strong><small>Revisa y cierra otros dispositivos</small></span><ChevronIcon /></button></section>
-
   return (
     <section className="page-section profile-page">
-      <ScreenHeader title="Perfil" settings={() => setScreen('settings')} />
-      <div className="profile-identity"><div className="avatar">{initials}</div><div><h2>{user.name}</h2><span><ShieldIcon /> Cuenta {user.kycStatus === 'Verificado' ? 'verificada' : 'pendiente'}</span></div></div>
-      <section className="profile-info-card"><div><PhoneIcon /><span><small>Número de teléfono</small><strong>{user.phone}</strong></span></div><div><CopyIcon /><span><small>IonTag</small><strong>@{user.alias}</strong></span></div><div><ShieldIcon /><span><small>Estado KYC</small><strong>{user.kycStatus}</strong></span></div><div><GlobeIcon /><span><small>País</small><strong>Perú</strong></span></div></section>
-      <span className="profile-section-label">Seguridad</span>
-      <section className="profile-menu-card"><ProfileRow Icon={UserIcon} title="Biometría" value="Activa" onClick={() => setScreen('devices')} /><ProfileRow Icon={KeyIcon} title="Código de acceso" value="Activo" /><ProfileRow Icon={ShieldIcon} title="Autenticación en dos pasos" value="Activa" /><ProfileRow Icon={DeviceIcon} title="Administrar dispositivos" value="3 dispositivos" onClick={() => setScreen('devices')} /></section>
+      <header className="profile-screen-header"><span /><h1>Perfil</h1><span /></header>
+      <div className="profile-identity"><div className="avatar">{user.name.split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase()}</div><div><h2>{user.name}</h2><span><ShieldIcon /> Cuenta {user.kycStatus === 'Verificado' ? 'verificada' : 'pendiente'}</span></div></div>
+      <section className="profile-info-card"><div><UserIcon /><span><small>IonTag</small><strong>@{user.alias}</strong></span></div><div><ShieldIcon /><span><small>Estado KYC</small><strong>{user.kycStatus}</strong></span></div></section>
       <span className="profile-section-label">Cuenta V1</span>
-      <section className="profile-menu-card"><ProfileRow Icon={ActivityIcon} title="Historial" detail="Movimientos y comprobantes" value="Disponible" /><ProfileRow Icon={ReceiveIcon} title="Cobros básicos" detail="Recibe por IonTag o QR" value="V1" /></section>
-      <section className="profile-menu-card profile-help"><ProfileRow Icon={HelpIcon} title="Ayuda y soporte" /></section>
+      <section className="profile-menu-card"><div className="profile-menu-row"><span className="profile-row-icon"><ActivityIcon /></span><span className="profile-row-copy"><strong>Historial</strong><small>Movimientos y comprobantes backend</small></span><span className="profile-row-value">Disponible</span><ChevronIcon /></div><div className="profile-menu-row"><span className="profile-row-icon"><ReceiveIcon /></span><span className="profile-row-copy"><strong>Cobros básicos</strong><small>Solicitudes de pago en PEN</small></span><span className="profile-row-value">V1</span><ChevronIcon /></div></section>
       <button className="profile-logout" onClick={onReset}><LogoutIcon /> {logoutLabel}</button>
     </section>
   )
-}
-
-function ToggleProfileRow({ Icon, title, detail, value, setValue }: { Icon: typeof HomeIcon; title: string; detail: string; value: boolean; setValue: (value: boolean) => void }) {
-  return <div className="profile-toggle-row"><span className="profile-row-icon"><Icon /></span><span className="profile-row-copy"><strong>{title}</strong><small>{detail}</small></span><button className={`switch ${value ? 'on' : ''}`} aria-label={title} aria-pressed={value} onClick={() => setValue(!value)}><i /></button></div>
 }
 
 interface ActionModalProps {
   action: Exclude<Action, null>
   state: IonState
   demoMode: boolean
+  paymentRequests: PaymentRequestState
+  processing: boolean
+  processingRequestId: string | null
   onClose: () => void
-  onTransaction: (transaction: Transaction, penChange: number, usdtChange?: number) => void
+  onDemoTransaction: (transaction: Transaction, penChange: number, usdtChange?: number) => void
+  onApiTransfer: (input: { recipientAlias: string; amount: string; note?: string }) => Promise<void>
+  onApiPaymentRequest: (input: { payerAlias: string; amount: string; note?: string }) => Promise<void>
+  onApiPayRequest: (id: string) => Promise<void>
 }
 
-function ActionModal({ action, state, demoMode, onClose, onTransaction }: ActionModalProps) {
+function ActionModal({ action, state, demoMode, paymentRequests, processing, processingRequestId, onClose, onDemoTransaction, onApiTransfer, onApiPaymentRequest, onApiPayRequest }: ActionModalProps) {
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
-  const numeric = Number(amount)
+  const pendingReceived = paymentRequests.received.filter((request) => request.status === 'PENDING')
+  const requestBusy = processing || Boolean(processingRequestId)
 
   const config = {
-    send: { title: 'Enviar dinero', eyebrow: 'Transferencia IONPAY', target: 'Destinatario', placeholder: '@usuario o celular', button: 'Confirmar envío' },
-    pay: { title: 'Realizar un pago', eyebrow: 'Pago seguro', target: 'Comercio', placeholder: 'Nombre o código del comercio', button: 'Confirmar pago' },
-    receive: { title: 'Recibir dinero', eyebrow: 'Tu cuenta IONPAY', target: '', placeholder: '', button: '' },
+    send: { title: 'Enviar dinero', eyebrow: demoMode ? 'Modo demostración' : 'Transferencia IONPAY API', target: 'Destinatario', placeholder: '@usuario o celular', button: 'Confirmar envío' },
+    pay: { title: 'Realizar un pago', eyebrow: demoMode ? 'Modo demostración' : 'Solicitudes por pagar', target: 'Comercio', placeholder: 'Nombre o código del comercio', button: 'Confirmar pago' },
+    receive: { title: demoMode ? 'Recibir dinero' : 'Crear solicitud de pago', eyebrow: demoMode ? 'Tu cuenta IONPAY' : 'Cobro IONPAY API', target: 'Pagador', placeholder: '@usuario pagador', button: 'Crear solicitud' },
   }[action]
 
-  if (!demoMode) {
-    return (
-      <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-        <section className="modal" role="dialog" aria-modal="true">
-          <button className="modal-close" onClick={onClose}><CloseIcon /></button>
-          <span className="eyebrow">Integración por etapas</span>
-          <h2>{config.title}</h2>
-          <div className="notice-box api-pending-operation">
-            <strong>Operación todavía no conectada</strong>
-            <p>En esta fase solo se conectaron autenticación, saldos y actividad. Esta acción no enviará ni modificará dinero.</p>
-          </div>
-          <button className="secondary-button" onClick={onClose}>Entendido</button>
-        </section>
-      </div>
-    )
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    if (processing) return
+    setError('')
+
+    if (action === 'pay' && !demoMode) return
+    if (action === 'receive' && demoMode) return
+    if (!validAmount(amount)) return setError('Ingresa un monto válido en PEN con máximo 2 decimales.')
+    if ((action === 'send' || action === 'pay' || action === 'receive') && !name.trim()) return setError('Indica el usuario correspondiente.')
+    if (demoMode && (action === 'send' || action === 'pay') && Number(amount) > state.wallet.pen) return setError('No tienes saldo suficiente en soles.')
+
+    try {
+      if (demoMode) {
+        const kind = action === 'pay' ? 'payment' : 'send'
+        onDemoTransaction({ id: makeId(), kind, title: action === 'pay' ? 'Pago realizado' : 'Dinero enviado', counterpart: name.trim(), amount: Number(amount), currency: 'PEN', direction: 'out', status: 'Completado', channel: action === 'pay' ? 'Ion Pay Demo' : 'IONPAY Demo', createdAt: new Date().toISOString(), note: note.trim() || undefined }, -Number(amount))
+        return
+      }
+
+      if (action === 'send') {
+        await onApiTransfer({ recipientAlias: name, amount: amount.trim(), note })
+      } else if (action === 'receive') {
+        await onApiPaymentRequest({ payerAlias: name, amount: amount.trim(), note })
+      }
+    } catch (cause) {
+      setError(errorMessage(cause, 'No se pudo completar la operación.'))
+    }
   }
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault()
+  const payRequest = async (id: string) => {
+    if (processing || processingRequestId) return
     setError('')
-    if (!numeric || numeric <= 0) return setError('Ingresa un monto válido.')
-    if ((action === 'send' || action === 'pay') && !name.trim()) return setError('Indica el destinatario.')
-    if (numeric > state.wallet.pen) return setError('No tienes saldo suficiente en soles.')
-    const kind = action === 'pay' ? 'payment' : 'send'
-    onTransaction({ id: makeId(), kind, title: action === 'pay' ? 'Pago realizado' : 'Dinero enviado', counterpart: name.trim(), amount: numeric, currency: 'PEN', direction: 'out', status: 'Completado', channel: action === 'pay' ? 'Ion Pay' : 'IONPAY', createdAt: new Date().toISOString(), note: note.trim() || undefined }, -numeric)
+    try {
+      await onApiPayRequest(id)
+    } catch (cause) {
+      setError(errorMessage(cause, 'No se pudo pagar la solicitud.'))
+    }
   }
 
   return (
-    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+    <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !requestBusy && onClose()}>
       <section className="modal" role="dialog" aria-modal="true">
-        <button className="modal-close" onClick={onClose}><CloseIcon /></button>
-        <span className="eyebrow">Modo demostración</span><h2>{config.title}</h2>
-        {action === 'receive' ? <ReceivePanel user={state.user!} /> : (
-          <form onSubmit={submit}>
-            <label className="field"><span>{config.target}</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder={config.placeholder} autoFocus /></label>
-            <label className="field amount-field"><span>Monto</span><div><b>S/</b><input value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" inputMode="decimal" /></div><small>Disponible: {money(state.wallet.pen, 'PEN')}</small></label>
-            <label className="field"><span>Nota <i>(opcional)</i></span><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="¿Para qué es?" /></label>
-            {error && <div className="form-error">{error}</div>}
-            <button className="primary-button" type="submit">{config.button}</button>
-            <div className="safe-caption"><ShieldIcon /> Simulación local: no mueve dinero real</div>
-          </form>
-        )}
+        <button className="modal-close" onClick={onClose} disabled={requestBusy}><CloseIcon /></button>
+        <span className="eyebrow">{config.eyebrow}</span><h2>{config.title}</h2>
+        {action === 'receive' && demoMode ? <ReceivePanel user={state.user!} /> : null}
+        {action === 'pay' && !demoMode ? <div><div className="notice-box"><strong>Pagos confirmados por backend</strong><p>El saldo no se modifica localmente. Después de pagar se recargan wallet, actividad y solicitudes.</p></div><div className="full-list" style={{ padding: 0, marginTop: 14 }}>{pendingReceived.length ? pendingReceived.map((request) => <div className="transaction-row" key={request.id}><span className="transaction-icon outgoing"><PayIcon /></span><span className="transaction-main"><strong>@{request.requesterAlias}</strong><small>{request.note || request.reference} · vence {shortDate(request.expiresAt)}</small></span><span className="transaction-amount out"><strong>{money(request.amount, 'PEN')}</strong><small>{request.status}</small></span><button className="secondary-button" type="button" disabled={requestBusy} onClick={() => void payRequest(request.id)}>{processingRequestId === request.id ? 'Pagando...' : 'Pagar'}</button></div>) : <EmptyActivity />}</div>{error && <div className="form-error">{error}</div>}</div> : null}
+        {action !== 'pay' || demoMode ? <form onSubmit={submit}>{!(action === 'receive' && demoMode) && <label className="field"><span>{config.target}</span><input value={name} onChange={(event) => setName(event.target.value)} placeholder={config.placeholder} autoFocus /></label>}{!(action === 'receive' && demoMode) && <label className="field amount-field"><span>Monto</span><div><b>S/</b><input value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" inputMode="decimal" /></div><small>Disponible: {money(state.wallet.pen, 'PEN')}</small></label>}{!(action === 'receive' && demoMode) && <label className="field"><span>Nota <i>(opcional)</i></span><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="¿Para qué es?" maxLength={120} /></label>}{error && <div className="form-error">{error}</div>}{!(action === 'receive' && demoMode) && <button className="primary-button" type="submit" disabled={processing}>{processing ? 'Procesando...' : config.button}</button>}<div className="safe-caption"><ShieldIcon /> {demoMode ? 'Simulación local: no mueve dinero real' : 'API local: backend es fuente de verdad, PEN-only'}</div></form> : null}
       </section>
     </div>
   )
@@ -306,39 +287,52 @@ function ReceiptModal({ item, onClose }: { item: Transaction; onClose: () => voi
   return <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><section className="modal receipt"><button className="modal-close" onClick={onClose}><CloseIcon /></button><div className="success-mark"><CheckIcon /></div><span className="eyebrow">Ion Receipt</span><h2>{item.status}</h2><div className={`receipt-amount ${item.direction}`}>{item.direction === 'in' ? '+' : item.direction === 'out' ? '−' : ''}{money(item.amount, item.currency)}</div><div className="receipt-details"><div><span>Operación</span><strong>{item.title}</strong></div><div><span>Referencia</span><strong>{item.counterpart}</strong></div><div><span>Fecha</span><strong>{new Date(item.createdAt).toLocaleString('es-PE')}</strong></div><div><span>Canal</span><strong>{item.channel}</strong></div><div><span>Código</span><strong>{item.id}</strong></div></div><button className="secondary-button" onClick={onClose}>Cerrar comprobante</button></section></div>
 }
 
-type AppMode = 'checking' | 'signed-out' | 'api' | 'demo'
-
 function toIonUser(user: User): IonUser {
-  return {
-    name: user.name,
-    phone: user.phone,
-    alias: user.alias,
-    kycStatus: user.kycStatus === 'VERIFIED' ? 'Verificado' : 'Pendiente',
-  }
+  return { name: user.name, phone: user.phone, alias: user.alias, kycStatus: user.kycStatus === 'VERIFIED' ? 'Verificado' : 'Pendiente' }
 }
 
 export default function App() {
   const [state, setState] = useState<IonState>({ user: null, wallet: { pen: 0, usdt: 0 }, transactions: [] })
+  const [paymentRequests, setPaymentRequests] = useState<PaymentRequestState>(emptyPaymentRequests)
   const [mode, setMode] = useState<AppMode>('checking')
   const [connectionError, setConnectionError] = useState('')
   const [tab, setTab] = useState<Tab>('home')
   const [action, setAction] = useState<Action>(null)
   const [receipt, setReceipt] = useState<Transaction | null>(null)
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useState<ToastState>(null)
+  const [processing, setProcessing] = useState(false)
+  const [processingRequestId, setProcessingRequestId] = useState<string | null>(null)
+  const moneyOperationInFlight = useRef(false)
+
+  const flash = (message: string, variant: 'success' | 'error' = 'success') => {
+    setToast({ message, variant })
+    window.setTimeout(() => setToast(null), 2600)
+  }
+
+  const beginMoneyOperation = () => {
+    if (moneyOperationInFlight.current) return false
+    moneyOperationInFlight.current = true
+    return true
+  }
+
+  const endMoneyOperation = () => {
+    moneyOperationInFlight.current = false
+  }
 
   const loadApiState = async (knownUser?: User) => {
-    const [user, balances, transactions] = await Promise.all([
+    const [user, balances, transactions, received, created] = await Promise.all([
       knownUser ? Promise.resolve(knownUser) : api.getUser(),
       api.getBalances(),
       api.getActivity(),
+      api.getReceivedPaymentRequests(),
+      api.getCreatedPaymentRequests(),
     ])
-    setState({
-      user: toIonUser(user),
-      wallet: { pen: balances.PEN ?? 0, usdt: balances.USDT ?? 0 },
-      transactions,
-    })
+    const nextState: IonState = { user: toIonUser(user), wallet: { pen: balances.PEN ?? 0, usdt: 0 }, transactions }
+    setState(nextState)
+    setPaymentRequests({ received, created })
     setConnectionError('')
     setMode('api')
+    return nextState
   }
 
   const restoreSession = async () => {
@@ -347,13 +341,7 @@ export default function App() {
       return
     }
     setMode('checking')
-    try {
-      await loadApiState()
-    } catch (cause) {
-      const message = cause instanceof IonPayApiError ? cause.message : 'No se pudo recuperar tu sesión.'
-      setConnectionError(message)
-      setMode('signed-out')
-    }
+    try { await loadApiState() } catch (cause) { setConnectionError(errorMessage(cause, 'No se pudo recuperar tu sesión.')); setMode('signed-out') }
   }
 
   useEffect(() => { void restoreSession() }, [])
@@ -372,7 +360,9 @@ export default function App() {
   const loadDemo = () => {
     const savedDemo = loadState()
     setState(savedDemo.user ? savedDemo : structuredClone(demoState))
+    setPaymentRequests(emptyPaymentRequests)
     setConnectionError('')
+    moneyOperationInFlight.current = false
     setMode('demo')
   }
 
@@ -380,17 +370,98 @@ export default function App() {
     api.clearSession()
     if (mode === 'demo') clearState()
     setState({ user: null, wallet: { pen: 0, usdt: 0 }, transactions: [] })
+    setPaymentRequests(emptyPaymentRequests)
+    moneyOperationInFlight.current = false
+    setProcessing(false)
+    setProcessingRequestId(null)
     setMode('signed-out')
     setTab('home')
   }
 
-  const addTransaction = (transaction: Transaction, penChange: number, usdtChange = 0) => {
+  const addDemoTransaction = (transaction: Transaction, penChange: number, usdtChange = 0) => {
     if (mode !== 'demo') return
     setState((current) => ({ ...current, wallet: { pen: Math.max(0, current.wallet.pen + penChange), usdt: Math.max(0, current.wallet.usdt + usdtChange) }, transactions: [transaction, ...current.transactions] }))
     setAction(null)
     setReceipt(transaction)
-    setToast('Simulación completada')
-    window.setTimeout(() => setToast(''), 2400)
+    flash('Simulación completada')
+  }
+
+  const applyConfirmedMoneyOperation = async (operation: () => Promise<MoneyOperationResponse>, successMessage: string, requestId?: string) => {
+    if (!beginMoneyOperation()) return
+    setProcessing(true)
+    if (requestId) setProcessingRequestId(requestId)
+    try {
+      const response = await operation()
+      const nextState = await loadApiState()
+      const confirmed = confirmedTransaction(nextState.transactions, response)
+      setAction(null)
+      if (confirmed) {
+        setReceipt(confirmed)
+        flash(successMessage)
+      } else {
+        flash('Backend confirmó la operación. Actividad recargada sin comprobante local.')
+      }
+    } finally {
+      setProcessing(false)
+      if (requestId) setProcessingRequestId(null)
+      endMoneyOperation()
+    }
+  }
+
+  const submitApiTransfer = async (input: { recipientAlias: string; amount: string; note?: string }) => {
+    if (mode !== 'api') return
+    await applyConfirmedMoneyOperation(() => {
+      const idempotencyKey = api.createIdempotencyKey()
+      return api.createTransfer(input, idempotencyKey)
+    }, 'Transferencia confirmada')
+  }
+
+  const submitApiPaymentRequest = async (input: { payerAlias: string; amount: string; note?: string }) => {
+    if (mode !== 'api') return
+    if (!beginMoneyOperation()) return
+    setProcessing(true)
+    try {
+      const idempotencyKey = api.createIdempotencyKey()
+      await api.createPaymentRequest(input, idempotencyKey)
+      await loadApiState()
+      setAction(null)
+      flash('Solicitud de pago creada')
+    } finally {
+      setProcessing(false)
+      endMoneyOperation()
+    }
+  }
+
+  const payPaymentRequest = async (id: string) => {
+    if (mode !== 'api') return
+    await applyConfirmedMoneyOperation(() => {
+      const idempotencyKey = api.createIdempotencyKey()
+      return api.payPaymentRequest(id, idempotencyKey)
+    }, 'Pago confirmado', id)
+  }
+
+  const cancelPaymentRequest = async (id: string) => {
+    if (mode !== 'api') return
+    if (!beginMoneyOperation()) return
+    setProcessing(true)
+    setProcessingRequestId(id)
+    try {
+      await api.cancelPaymentRequest(id)
+      await loadApiState()
+      flash('Solicitud cancelada')
+    } finally {
+      setProcessingRequestId(null)
+      setProcessing(false)
+      endMoneyOperation()
+    }
+  }
+
+  const cancelPaymentRequestFromServices = async (id: string) => {
+    try { await cancelPaymentRequest(id) } catch (cause) { flash(errorMessage(cause, 'No se pudo cancelar la solicitud.'), 'error') }
+  }
+
+  const payPaymentRequestFromServices = async (id: string) => {
+    try { await payPaymentRequest(id) } catch (cause) { flash(errorMessage(cause, 'No se pudo pagar la solicitud.'), 'error') }
   }
 
   if (mode === 'checking' || mode === 'signed-out' || !state.user) {
@@ -404,13 +475,13 @@ export default function App() {
         {mode === 'demo' && <div className="demo-caption">Modo demo · fondos simulados · no mueve dinero real</div>}
         {tab === 'home' && <Home state={state} setAction={setAction} setTab={setTab} openReceipt={setReceipt} />}
         {tab === 'activity' && <ActivityPage transactions={state.transactions} openReceipt={setReceipt} />}
-        {tab === 'services' && <ServicesPage state={state} openAction={(next) => setAction(next)} />}
+        {tab === 'services' && <ServicesPage state={state} paymentRequests={paymentRequests} openAction={(next) => setAction(next)} onPayRequest={payPaymentRequestFromServices} onCancelRequest={cancelPaymentRequestFromServices} processingRequestId={processingRequestId} requestOperationPending={Boolean(processingRequestId)} />}
         {tab === 'profile' && <ProfilePage user={state.user} onReset={reset} logoutLabel={mode === 'demo' ? 'Salir y borrar datos demo' : 'Cerrar sesión'} />}
       </main>
       <MobileNav tab={tab} setTab={setTab} onPay={() => setAction('pay')} />
-      {action && <ActionModal action={action} state={state} demoMode={mode === 'demo'} onClose={() => setAction(null)} onTransaction={addTransaction} />}
+      {action && <ActionModal action={action} state={state} demoMode={mode === 'demo'} paymentRequests={paymentRequests} processing={processing} processingRequestId={processingRequestId} onClose={() => setAction(null)} onDemoTransaction={addDemoTransaction} onApiTransfer={submitApiTransfer} onApiPaymentRequest={submitApiPaymentRequest} onApiPayRequest={payPaymentRequest} />}
       {receipt && <ReceiptModal item={receipt} onClose={() => setReceipt(null)} />}
-      {toast && <div className="toast"><CheckIcon />{toast}</div>}
+      {toast && <div className={`toast ${toast.variant}`} role={toast.variant === 'error' ? 'alert' : 'status'}>{toast.variant === 'success' && <CheckIcon />}{toast.message}</div>}
     </div>
   )
 }

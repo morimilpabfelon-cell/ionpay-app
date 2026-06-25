@@ -1,8 +1,10 @@
 export type Currency = 'PEN' | 'USDT'
+export type V1Currency = 'PEN'
 export type TransactionKind = 'receive' | 'send' | 'payment' | 'conversion'
 export type TransactionStatus = 'Completado' | 'Pendiente' | 'En revisión'
 
 export type ApiKycStatus = 'PENDING' | 'VERIFIED'
+export type PaymentRequestStatus = 'PENDING' | 'PAID' | 'CANCELLED' | 'EXPIRED'
 
 export interface User {
   id: string
@@ -20,7 +22,7 @@ export interface Session {
 
 export interface Balance {
   PEN: number
-  USDT: number
+  USDT?: number
 }
 
 export interface ApiError {
@@ -53,6 +55,26 @@ export interface Transaction {
   channel: string
   createdAt: string
   note?: string
+}
+
+export interface PaymentRequest {
+  id: string
+  reference: string
+  requesterUserId: string
+  requesterAlias: string
+  payerUserId: string
+  payerAlias: string
+  currency: V1Currency
+  amount: number
+  status: PaymentRequestStatus
+  note: string
+  createdAt: string
+  updatedAt: string
+  expiresAt: string
+  paidAt: string | null
+  cancelledAt: string | null
+  expiredAt: string | null
+  paidTransactionId: string | null
 }
 
 export interface IonState {

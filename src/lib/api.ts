@@ -1,4 +1,4 @@
-import type { ApiError, Balance, Currency, Session, Transaction, User } from '../types'
+import type { ApiError, Balance, Currency, PaymentRequest, PaymentRequestStatus, Session, Transaction, User } from '../types'
 
 const API_URL = (import.meta.env.VITE_IONPAY_API_URL || 'http://127.0.0.1:8787').replace(/\/$/, '')
 const SESSION_KEY = 'ionpay-api-session-v1'
@@ -10,7 +10,7 @@ interface AuthResponse extends Session {
 interface ActivityItem {
   id: string
   reference: string
-  type: 'TRANSFER' | 'CONVERSION' | 'DEMO_FUNDING' | string
+  type: 'TRANSFER' | 'PAYMENT_REQUEST_PAYMENT' | 'CONVERSION' | 'DEMO_FUNDING' | string
   status: 'COMPLETED' | 'PENDING' | string
   currency: Currency
   amount: number
@@ -25,6 +25,19 @@ interface ErrorResponse {
   }
 }
 
+interface ApiTransaction {
+  id?: string
+  reference?: string
+  type?: string
+  status?: string
+}
+
+export interface MoneyOperationResponse {
+  transaction?: ApiTransaction
+  balances?: Balance
+  paymentRequest?: PaymentRequest
+}
+
 export class IonPayApiError extends Error implements ApiError {
   status: number
   code: string
@@ -35,6 +48,26 @@ export class IonPayApiError extends Error implements ApiError {
     this.status = status
     this.code = code
   }
+}
+
+function createIdempotencyKey() {
+  const cryptoApi = globalThis.crypto
+  if (cryptoApi?.randomUUID) return cryptoApi.randomUUID()
+
+  if (cryptoApi?.getRandomValues) {
+    const bytes = new Uint8Array(16)
+    cryptoApi.getRandomValues(bytes)
+    bytes[6] = (bytes[6] & 0x0f) | 0x40
+    bytes[8] = (bytes[8] & 0x3f) | 0x80
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+  }
+
+  throw new IonPayApiError(0, 'IDEMPOTENCY_UNAVAILABLE', 'No se pudo generar una clave segura de idempotencia.')
+}
+
+function normalizeAlias(alias: string) {
+  return alias.trim().toLowerCase().replace(/^@/, '')
 }
 
 function readSession(): Session | null {
@@ -95,33 +128,72 @@ async function request<T>(path: string, options: RequestInit = {}, authenticated
   return body
 }
 
+function stringMetadata(value: unknown, fallback = '') {
+  return typeof value === 'string' && value ? value : fallback
+}
+
 function mapActivity(items: ActivityItem[]): Transaction[] {
-  const visibleItems = items.filter((item) => item.type !== 'CONVERSION' || item.amount > 0)
+  const visibleItems = items.filter((item) => item.currency === 'PEN' && item.type !== 'CONVERSION')
+
   return visibleItems.map((item) => {
-    const direction = item.type === 'CONVERSION' ? 'neutral' : item.amount < 0 ? 'out' : 'in'
+    const direction = item.amount < 0 ? 'out' : item.amount > 0 ? 'in' : 'neutral'
     const metadata = item.metadata || {}
-    const counterpart = item.type === 'CONVERSION'
-      ? `${String(metadata.from || '')} → ${String(metadata.to || '')}`
-      : direction === 'out'
-        ? `@${String(metadata.recipientAlias || 'destinatario')}`
-        : item.type === 'DEMO_FUNDING'
-          ? 'Fondeo de demostración'
-          : `@${String(metadata.senderAlias || 'remitente')}`
+    const recipientAlias = stringMetadata(metadata.recipientAlias, 'destinatario')
+    const senderAlias = stringMetadata(metadata.senderAlias, 'remitente')
+    const requesterAlias = stringMetadata(metadata.requesterAlias, 'solicitante')
+    const payerAlias = stringMetadata(metadata.payerAlias, 'pagador')
+
+    if (item.type === 'PAYMENT_REQUEST_PAYMENT') {
+      const outgoing = direction === 'out'
+      return {
+        id: item.reference,
+        kind: outgoing ? 'payment' : 'receive',
+        title: outgoing ? 'Pago realizado' : 'Cobro recibido',
+        counterpart: `@${outgoing ? requesterAlias : payerAlias}`,
+        amount: Math.abs(item.amount),
+        currency: 'PEN',
+        direction,
+        status: item.status === 'COMPLETED' ? 'Completado' : 'Pendiente',
+        channel: 'IONPAY API',
+        createdAt: item.createdAt,
+        note: stringMetadata(metadata.note) || undefined,
+      }
+    }
+
+    if (item.type === 'DEMO_FUNDING') {
+      return {
+        id: item.reference,
+        kind: 'receive',
+        title: 'Saldo demo recibido',
+        counterpart: 'Fondeo de demostración',
+        amount: Math.abs(item.amount),
+        currency: 'PEN',
+        direction: 'in',
+        status: item.status === 'COMPLETED' ? 'Completado' : 'Pendiente',
+        channel: 'IONPAY API',
+        createdAt: item.createdAt,
+        note: stringMetadata(metadata.note) || undefined,
+      }
+    }
 
     return {
       id: item.reference,
-      kind: item.type === 'CONVERSION' ? 'conversion' : item.type === 'DEMO_FUNDING' ? 'receive' : direction === 'out' ? 'send' : 'receive',
-      title: item.type === 'CONVERSION' ? 'Conversión completada' : item.type === 'DEMO_FUNDING' ? 'Saldo demo recibido' : direction === 'out' ? 'Dinero enviado' : 'Dinero recibido',
-      counterpart,
+      kind: direction === 'out' ? 'send' : 'receive',
+      title: direction === 'out' ? 'Dinero enviado' : 'Dinero recibido',
+      counterpart: `@${direction === 'out' ? recipientAlias : senderAlias}`,
       amount: Math.abs(item.amount),
-      currency: item.currency,
+      currency: 'PEN',
       direction,
       status: item.status === 'COMPLETED' ? 'Completado' : 'Pendiente',
-      channel: item.type === 'CONVERSION' ? 'Ion Convert' : 'IONPAY API',
+      channel: 'IONPAY API',
       createdAt: item.createdAt,
-      note: typeof metadata.note === 'string' && metadata.note ? metadata.note : undefined,
+      note: stringMetadata(metadata.note) || undefined,
     }
   })
+}
+
+function paymentRequestPath(path: string, status?: PaymentRequestStatus) {
+  return status ? `${path}?status=${encodeURIComponent(status)}` : path
 }
 
 export const api = {
@@ -159,5 +231,58 @@ export const api = {
   async getActivity(limit = 50) {
     const response = await request<{ activity: ActivityItem[] }>(`/api/activity?limit=${limit}`, {}, true)
     return mapActivity(response.activity)
+  },
+
+  createIdempotencyKey,
+
+  async createTransfer(input: { recipientAlias: string; amount: string; note?: string }, idempotencyKey: string) {
+    return request<MoneyOperationResponse>('/api/transfers', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey },
+      body: JSON.stringify({
+        recipientAlias: normalizeAlias(input.recipientAlias),
+        amount: input.amount,
+        note: input.note?.trim() || '',
+      }),
+    }, true)
+  },
+
+  async createPaymentRequest(input: { payerAlias: string; amount: string; note?: string; expiresInDays?: number }, idempotencyKey: string) {
+    return request<{ paymentRequest: PaymentRequest }>('/api/payment-requests', {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey },
+      body: JSON.stringify({
+        payerAlias: normalizeAlias(input.payerAlias),
+        currency: 'PEN',
+        amount: input.amount,
+        note: input.note?.trim() || '',
+        expiresInDays: input.expiresInDays ?? 7,
+      }),
+    }, true)
+  },
+
+  async getReceivedPaymentRequests(status?: PaymentRequestStatus) {
+    const response = await request<{ paymentRequests: PaymentRequest[] }>(paymentRequestPath('/api/payment-requests/received', status), {}, true)
+    return response.paymentRequests
+  },
+
+  async getCreatedPaymentRequests(status?: PaymentRequestStatus) {
+    const response = await request<{ paymentRequests: PaymentRequest[] }>(paymentRequestPath('/api/payment-requests/created', status), {}, true)
+    return response.paymentRequests
+  },
+
+  async payPaymentRequest(id: string, idempotencyKey: string) {
+    return request<MoneyOperationResponse>(`/api/payment-requests/${encodeURIComponent(id)}/pay`, {
+      method: 'POST',
+      headers: { 'Idempotency-Key': idempotencyKey },
+      body: JSON.stringify({}),
+    }, true)
+  },
+
+  async cancelPaymentRequest(id: string) {
+    return request<{ paymentRequest: PaymentRequest }>(`/api/payment-requests/${encodeURIComponent(id)}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }, true)
   },
 }

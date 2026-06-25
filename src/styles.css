@@ -431,6 +431,7 @@ svg { width: 22px; height: 22px; }
 .receipt-details span { color: var(--muted); }
 .receipt-details strong { text-align: right; }
 .toast { position: fixed; z-index: 100; left: 50%; bottom: 30px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; color: white; background: #0b2a29; box-shadow: 0 15px 35px rgba(0,0,0,.24); padding: 12px 18px; border-radius: 30px; font-size: 12px; font-weight: 700; animation: rise .2s ease; }
+.toast.error { background: #3b0b0b; }
 .toast svg { width: 16px; color: var(--lime); }
 .mobile-nav { display: none; }
 
