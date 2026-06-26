@@ -10,64 +10,73 @@ IONPAY se desarrolla por fases pequeñas, verificables y revisables.
 
 Regla central:
 
-- una fase;
+- una fase o gap activo;
 - una frontera de alcance;
-- una PR pequeña;
+- una PR pequeña cuando aplique;
 - una validación clara;
 - reviewer obligatorio cuando hay riesgo financiero;
-- ningún merge final o release sin autorización humana explícita.
+- ningún merge final, cierre de fase o release sin autorización humana explícita.
 
 ## Estado operativo actual
 
 ### Estado de control
 
-Estado actual: **RECONCILED WITH ACTIVE HARDENING GAP**.
+Estado actual: **V1 READINESS / POST-HARDENING RECONCILIATION**.
 
 No hay producción pública ni dinero real.
 
-El producto avanzó hasta Phase 1.8 / 1.8B en `main`, pero queda abierto un gap de hardening de comprobantes/actividad en Issue #20.
+No hay active implementation item autorizado.
 
-### Última mejora validada documentada
+Issue #20 está **closed / completed**. El hardening de comprobantes fue implementado, revisado, aprobado y mergeado mediante PR #24.
 
-- **Phase 1.8 / 1.8B — Payment Requests UX + Activity/Receipt Continuity Hardening**.
-- Estado documentado: **VALIDATED + REVIEWED + FOUNDER-AUTHORIZED PHASE CLOSURE**.
-- Documento: `docs/phase-1-8-validation.md`.
-- Commit de implementación registrado: `c8a7118f06a353bde56672ea9f1d1e27e3a9adca`.
-- Commit final registrado: `bec6ccd1aa2fa87d5e0be732a25e24dba5e026aa`.
-- Archivo principal de implementación: `src/components/ServicesPage.tsx`.
+La automatización operativa base está instalada en `main` mediante PR #25.
 
-Alcance de Phase 1.8B:
+### Última mejora de producto cerrada
 
-- rediseño mobile de Cobros / Payment Requests;
-- header compacto;
-- resumen superior;
-- tabs `Recibidas` / `Creadas`;
-- cards compactas;
-- detalle en bottom sheet;
-- QR local solo dentro del detalle y solo para requests `PENDING`;
-- separación entre request, activity y receipt como evidencia.
+- **Issue #20 — Receipt Proof Hardening: explicit confirmed-activity gate**.
+- Estado: **closed / completed**.
+- Implementación: PR #24.
+- Branch: `issue-20-proof-gate`.
+- Reviewed head SHA: `115cd2a45dab98a937008d0d7f1dc4952b09a1c3`.
+- Squash merge SHA: `01d0a5aa9cf41b34b177bded26f93209080f0fc2`.
+- Archivos modificados:
+  - `src/App.tsx`;
+  - `src/lib/api.ts`;
+  - `src/types.ts`;
+  - `src/styles.css`.
 
-### Gap activo
+Resultado implementado:
 
-- Issue: **#20**.
-- Título actual: **Receipt Proof Hardening — explicit confirmed-activity gate**.
-- Estado: **open / active hardening gap**.
-- Riesgo: **R3 — financial proof / receipt integrity risk**.
+- receipt opening queda detrás de actividad PEN completada;
+- API-mode receipts requieren metadata de prueba API/backend;
+- pending, failed, missing-confirmation, unavailable, non-PEN y local-only API states no pueden abrir comprobantes;
+- demo receipts quedan claramente simulados;
+- UI de comprobante no disponible queda visible y no clickable.
 
-Objetivo:
+### Automatización operativa instalada
 
-- permitir receipt solo desde actividad confirmada/completada derivada del backend;
-- bloquear receipt para pending, failed, missing confirmation o estado local-only en API mode;
-- mantener demo claramente simulada;
-- mantener superficie pública PEN-only;
-- no tocar backend, ledger, DB, auth, Android, package ni lockfile.
+- PR: **#25 — Add operational automation gates**.
+- Estado: **closed / merged**.
+- Merge SHA: `fba68e68436ede6030c4228e70e9c6989aa6b398`.
+- Archivos instalados:
+  - `.github/workflows/validate.yml`;
+  - `.github/pull_request_template.md`;
+  - `scripts/pre-pr-check.ps1`.
 
-### PR cerrado durante reconciliación
+Capacidades instaladas:
 
-- PR: **#22**.
-- Estado: **closed / not merged**.
-- Razón: GitHub reportó `changed_files: 0`, `additions: 0`, `deletions: 0`, y patch vacío.
-- Conclusión: PR #22 no puede usarse como evidencia de implementación para Issue #20.
+- GitHub Actions validation workflow;
+- PR template con declaración de scope y evidencia obligatoria;
+- script local de pre-PR con detección de superficies restringidas.
+
+La automatización refuerza gates. No aprueba seguridad financiera, ledger, producción, dinero real ni scope de producto.
+
+### PRs reconciliados
+
+- PR #22: closed / not merged. No usar como evidencia de implementación porque GitHub reportó `changed_files: 0`, `additions: 0`, `deletions: 0` y patch vacío.
+- PR #23: closed / not merged. Superseded por PR #24. No usar como evidencia de implementación de Issue #20.
+- PR #24: closed / merged. Fuente de verdad para Issue #20.
+- PR #25: closed / merged. Fuente de verdad para automation gates.
 
 ## Fases completadas / documentadas
 
@@ -82,51 +91,41 @@ Objetivo:
 - Phase 1.4 — Account, Wallet & Single Fiat Balance.
 - Phase 1.5 — Frontend API Integration for Transfers and Payment Requests.
 - Phase 1.8 / 1.8B — Payment Requests UX + Activity/Receipt Continuity Hardening, documented in `docs/phase-1-8-validation.md`.
+- Issue #20 — Receipt Proof Hardening, completed by PR #24.
+- Operational automation gates, installed by PR #25.
 
 ## Próximo trabajo correcto
 
-### Issue #20 — Receipt Proof Hardening
+### P0.3 — Reconciliar Issue #10: V1 Product Surface Lock
 
-Estado: active hardening gap.
+Issue #10 sigue abierto y debe ser clasificado antes de iniciar nueva feature.
 
-No iniciar nueva feature hasta decidir e implementar este gap o marcarlo explícitamente como post-V1.
+Resultado esperado de clasificación:
 
-Permitido para Issue #20:
+```text
+A. Issue #10 ya está satisfecho por el estado actual → cerrar con evidencia.
+B. Issue #10 sigue abierto como hardening de superficie → convertir en próxima tarea P1.
+C. Issue #10 queda post-V1 → Founder + Product Architect + Scope Guardian deben aprobar.
+```
 
-- `src/App.tsx`;
-- `src/lib/api.ts`;
-- `src/types.ts`;
-- `src/styles.css`.
+Agentes requeridos:
 
-Bloqueado para Issue #20 salvo autorización separada:
+- Product Architect;
+- Scope Guardian;
+- Founder approval.
 
-- `server/**`;
-- DB/schema/migrations;
-- ledger;
-- money parser;
-- auth financiero;
-- `package.json`;
-- `pnpm-lock.yaml`;
-- `android/**`;
-- `ios/**`;
-- QR scanner;
-- camera;
-- public USDT;
-- conversions;
-- producción;
-- dinero real.
+Condicionales:
 
-Review requerido:
+- Frontend Surface Reviewer si se requieren cambios visuales o de claridad mobile;
+- Financial Safety Reviewer si se toca copy o UI que pueda sugerir saldo, pagos reales, recibos válidos, producción o dinero real.
 
-- Financial Safety Reviewer / Security & Ledger Auditor;
-- Frontend Surface Reviewer;
-- Founder approval before closure.
+No iniciar feature nueva hasta resolver la clasificación de Issue #10.
 
 ## Roadmap V1 pendiente
 
-Sujeto a resolver o posponer explícitamente Issue #20:
+Sujeto a reconciliar Issue #10:
 
-- Receipt Proof Hardening — explicit confirmed-activity gate.
+- V1 Product Surface Lock final.
 - Demo hardening: edge cases, loading states, empty states, error states, copy and mobile clarity.
 - V1 release candidate freeze.
 
@@ -199,6 +198,12 @@ http://127.0.0.1:8787
 
 ## Validación requerida para cambios futuros
 
+Pre-PR local:
+
+```powershell
+./scripts/pre-pr-check.ps1
+```
+
 Build web:
 
 ```bash
@@ -222,3 +227,25 @@ Diff check:
 ```bash
 git diff --check
 ```
+
+## Hard boundary
+
+Bloqueado salvo gate separado:
+
+- producción;
+- dinero real;
+- backend;
+- ledger;
+- DB/schema/migrations;
+- auth financiero;
+- money parser;
+- idempotency;
+- `package.json`;
+- `pnpm-lock.yaml`;
+- Android native;
+- iOS;
+- QR scanner;
+- camera;
+- public USDT;
+- conversions;
+- new feature scope sin issue/gate fresco.
