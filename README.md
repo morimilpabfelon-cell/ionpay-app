@@ -1,6 +1,6 @@
 # IONPAY
 
-IONPAY es una billetera financiera Android-first construida de forma incremental. El objetivo no es desarrollar todos los módulos al mismo tiempo, sino consolidar primero el núcleo seguro de cuenta, wallet, ledger, transferencias, cobros y trazabilidad; después integrar la interfaz; luego validar Android; y solo más adelante evaluar iOS y producción.
+IONPAY es una billetera financiera Android-first construida de forma incremental. El objetivo no es desarrollar todos los módulos al mismo tiempo, sino consolidar primero el núcleo seguro de cuenta, wallet, ledger, transferencias, cobros y trazabilidad; después integrar la interfaz; luego validar Android; y solo más adelante evaluar producción bajo autorización separada.
 
 La fuente operativa para agentes dentro del repositorio es [`AGENTS.md`](./AGENTS.md). Este README resume el estado del proyecto para revisión rápida y onboarding técnico.
 
@@ -15,42 +15,72 @@ Regla central:
 - una PR pequeña cuando aplique;
 - una validación clara;
 - reviewer obligatorio cuando hay riesgo financiero;
-- ningún merge final, cierre de fase o release sin autorización humana explícita.
+- ningún merge final, cierre de fase, release candidate sign-off o release sin autorización humana explícita.
 
 ## Estado operativo actual
 
 ### Estado de control
 
-Estado actual: **V1 READINESS / NO ACTIVE IMPLEMENTATION ITEM**.
+Estado actual: **V1 RC FREEZE**.
 
-No hay producción pública ni dinero real.
+Active implementation item: **none**.
 
-No hay active implementation item autorizado.
+No hay producción pública.
 
-Issue #10 está **closed / completed** como cierre administrativo. La evidencia principal es PR #11, que implementó Phase 1.3B — V1 Product Surface Lock.
+No hay dinero real.
 
-Issue #20 está **closed / completed**. El hardening de comprobantes fue implementado, revisado, aprobado y mergeado mediante PR #24.
+No hay release público autorizado.
 
-La automatización operativa base está instalada en `main` mediante PR #25.
+Issue #26 está **closed / completed** con decisión final: **A — ENTER V1 RC FREEZE**.
 
-### Última reconciliación administrativa
+Este estado congela alcance y gates. No autoriza implementación, producción, dinero real ni release público.
 
-- **Issue #10 — Phase 1.3B — V1 Product Surface Lock**.
+### Última decisión de control
+
+- **Issue #26 — P0 V1 Release Candidate Freeze Plan**.
 - Estado: **closed / completed**.
-- Tipo de cierre: administrativo, sin nueva implementación.
-- Evidencia principal: PR #11.
-- PR #11 estado: closed / merged.
-- PR #11 merge SHA: `23000ce37286f21b4637fe4da45ad9c97c45c905`.
-- PR #11 head SHA: `baa8672747f883007e9bd23875ab9926eba7a6de`.
-- Refuerzo secundario: PR #13 — PEN-only backend / wallet exposure.
-- No usar como evidencia principal de Issue #10: PR #22, PR #23, PR #24, PR #25.
+- Decisión final: **A — ENTER V1 RC FREEZE**.
+- Tipo: planning / readiness / gates.
+- Implementación: ninguna.
+- Código autorizado: no.
+- Feature autorizada: no.
+- Producción autorizada: no.
+- Dinero real autorizado: no.
+- Release público autorizado: no.
 
-Conclusión:
+Gates humanos registrados:
 
-- Issue #10 no abre nueva P1;
-- no queda post-V1;
-- no requiere implementación adicional;
-- V1 Product Surface Lock queda cerrado por evidencia histórica de PR #11.
+- Product Architect: **ENTER V1 RC FREEZE**.
+- Scope Guardian: **APPROVED FOR RC FREEZE SCOPE**.
+- Financial Safety Reviewer: **APPROVED FOR RC FREEZE FINANCIAL SAFETY**.
+- Frontend Surface Reviewer: **APPROVED FOR RC FREEZE FRONTEND SURFACE**.
+- Founder: **APPROVED FOR RC FREEZE**.
+
+### Clasificación Demo / Error / Loading / Empty states
+
+P1 antes de cualquier RC sign-off final si afecta:
+
+- confianza;
+- pago;
+- saldo;
+- receipt;
+- distinción demo/API;
+- falso éxito;
+- ambigüedad de loading;
+- ambigüedad de error;
+- claridad operativa.
+
+P2 después de RC solo si es polish cosmético y no afecta interpretación transaccional, proof de receipt/activity, claridad de pago/saldo, claridad demo/API ni scope V1.
+
+### Reconciliaciones cerradas
+
+- Issue #10: **closed / completed**. Cierre administrativo con PR #11 como evidencia principal de Phase 1.3B — V1 Product Surface Lock.
+- Issue #20: **closed / completed**. Receipt Proof Hardening implementado por PR #24.
+- Issue #26: **closed / completed**. V1 RC Freeze Plan completado.
+- PR #22: closed / not merged. No usar como evidencia de implementación.
+- PR #23: closed / not merged. Superseded por PR #24. No usar como evidencia de implementación.
+- PR #24: closed / merged. Fuente de verdad para Issue #20.
+- PR #25: closed / merged. Fuente de verdad para automation gates.
 
 ### Última mejora de producto cerrada
 
@@ -84,22 +114,7 @@ Resultado implementado:
   - `.github/pull_request_template.md`;
   - `scripts/pre-pr-check.ps1`.
 
-Capacidades instaladas:
-
-- GitHub Actions validation workflow;
-- PR template con declaración de scope y evidencia obligatoria;
-- script local de pre-PR con detección de superficies restringidas.
-
-La automatización refuerza gates. No aprueba seguridad financiera, ledger, producción, dinero real ni scope de producto.
-
-### PRs e issues reconciliados
-
-- Issue #10: closed / completed. Cierre administrativo con PR #11 como evidencia principal.
-- Issue #20: closed / completed. Implementado por PR #24.
-- PR #22: closed / not merged. No usar como evidencia de implementación porque GitHub reportó `changed_files: 0`, `additions: 0`, `deletions: 0` y patch vacío.
-- PR #23: closed / not merged. Superseded por PR #24. No usar como evidencia de implementación.
-- PR #24: closed / merged. Fuente de verdad para Issue #20.
-- PR #25: closed / merged. Fuente de verdad para automation gates.
+La automatización refuerza gates. No aprueba seguridad financiera, ledger, producción, dinero real, release público ni scope de producto.
 
 ## Fases completadas / documentadas
 
@@ -115,27 +130,20 @@ La automatización refuerza gates. No aprueba seguridad financiera, ledger, prod
 - Phase 1.5 — Frontend API Integration for Transfers and Payment Requests.
 - Phase 1.8 / 1.8B — Payment Requests UX + Activity/Receipt Continuity Hardening, documented in `docs/phase-1-8-validation.md`.
 - Issue #20 — Receipt Proof Hardening, completed by PR #24.
+- Issue #26 — V1 Release Candidate Freeze Plan, completed as V1 RC Freeze.
 - Operational automation gates, installed by PR #25.
 
 ## Próximo trabajo correcto
 
 No hay active implementation item.
 
-Antes de cualquier nueva implementación, el Agent Orchestrator & Memory Manager debe seleccionar y clasificar la siguiente brecha real de V1 Readiness.
+En V1 RC Freeze, cualquier trabajo posterior requiere issue separado, clasificación, gates requeridos y Founder approval explícito.
 
-Candidatos no autorizados todavía:
+Posibles trabajos futuros no autorizados por este README:
 
-- Demo hardening: edge cases, loading states, empty states, error states, copy and mobile clarity.
-- V1 release candidate freeze plan.
-
-Ningún candidato anterior autoriza código por sí mismo.
-
-## Roadmap V1 pendiente
-
-Pendiente de clasificación y gates frescos:
-
-- Demo hardening: edge cases, loading states, empty states, error states, copy and mobile clarity.
-- V1 release candidate freeze.
+- P1 hardening si aparece un riesgo sobre pago, saldo, receipt, demo/API, falso éxito, loading/error ambiguo o claridad operativa.
+- P2 polish si es cosmético y no afecta interpretación transaccional.
+- RC sign-off final con evidencia técnica y validación mobile 390x844.
 
 ## Alcance V1
 
@@ -167,7 +175,9 @@ Fuera de V1 salvo aprobación explícita:
 - referidos;
 - préstamos;
 - multi-currency public surface;
-- producción pública o dinero real.
+- producción pública;
+- dinero real;
+- release público.
 
 ## Arquitectura actual
 
@@ -242,6 +252,7 @@ Bloqueado salvo gate separado:
 
 - producción;
 - dinero real;
+- release público;
 - backend;
 - ledger;
 - DB/schema/migrations;
@@ -256,4 +267,7 @@ Bloqueado salvo gate separado:
 - camera;
 - public USDT;
 - conversions;
+- cards;
+- IonExchange;
+- checkout/gateway/payouts;
 - new feature scope sin issue/gate fresco.
