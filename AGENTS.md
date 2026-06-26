@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-IONPAY es una billetera Android-first del ecosistema Ion. Debe construirse por fases: primero núcleo seguro, después integración de flujos, luego validación móvil, y despliegue público solo al final.
+IONPAY es una billetera Android-first del ecosistema Ion. Debe construirse por fases: primero núcleo seguro, después integración de flujos, luego validación móvil, y despliegue público solo al final bajo autorización separada.
 
 Regla central: no construir wallet, pagos, QR, comercio, Android, iOS, exchange, tarjetas y módulos avanzados al mismo tiempo.
 
@@ -20,7 +20,7 @@ Regla central: no construir wallet, pagos, QR, comercio, Android, iOS, exchange,
 - Software Engineer audita y prepara instrucciones; no autoriza merge por sí solo.
 - Financial Safety Reviewer revisa wallet, saldo, transferencias, cobros, idempotency, receipts y estados de pago.
 - Frontend Surface Reviewer revisa UI, errores, claridad, mobile usability y riesgo de falso éxito.
-- Founder approval es obligatorio antes de merge final, cierre de fase o release.
+- Founder approval es obligatorio antes de merge final, cierre de fase, RC sign-off o release.
 - Si un PR de saldo/pagos se mergea sin evidencia visible completa, el estado pasa a HOLD hasta cerrar post-merge validation.
 
 ## Memoria operativa obligatoria
@@ -40,19 +40,61 @@ Si no existe handoff suficiente, generar reporte antes de enrutar trabajo.
 
 ### Estado de control
 
-Estado actual: **V1 READINESS / NO ACTIVE IMPLEMENTATION ITEM**.
+Estado actual: **V1 RC FREEZE**.
+
+Active implementation item: **none**.
 
 No hay despliegue público de pagos.
 
-No hay producción pública ni dinero real.
+No hay producción pública.
 
-No hay active implementation item autorizado.
+No hay dinero real.
 
-Issue #10 está **closed / completed** como cierre administrativo. PR #11 es la evidencia principal de Phase 1.3B — V1 Product Surface Lock.
+No hay release público autorizado.
 
-Issue #20 está **closed / completed**. Fue implementado y mergeado mediante PR #24.
+Issue #26 está **closed / completed** con decisión final: **A — ENTER V1 RC FREEZE**.
 
-PR #25 instaló automation gates en `main`.
+Este estado congela alcance y gates. No autoriza implementación, producción, dinero real ni release público.
+
+### Última decisión de control
+
+Issue #26 — P0 V1 Release Candidate Freeze Plan.
+
+Evidencia:
+
+- Issue: `ionpay-app#26`.
+- Issue state: closed / completed.
+- Decision: `A — ENTER V1 RC FREEZE`.
+- Type: planning / readiness / gates.
+- No code changes were authorized.
+- No feature implementation was authorized.
+- No production was authorized.
+- No real money was authorized.
+- No public release was authorized.
+
+Gates humanos registrados:
+
+- Product Architect: `ENTER V1 RC FREEZE`.
+- Scope Guardian: `APPROVED FOR RC FREEZE SCOPE`.
+- Financial Safety Reviewer: `APPROVED FOR RC FREEZE FINANCIAL SAFETY`.
+- Frontend Surface Reviewer: `APPROVED FOR RC FREEZE FRONTEND SURFACE`.
+- Founder: `APPROVED FOR RC FREEZE`.
+
+### Clasificación Demo / Error / Loading / Empty states
+
+P1 antes de cualquier RC sign-off final si afecta:
+
+- confianza;
+- pago;
+- saldo;
+- receipt;
+- distinción demo/API;
+- falso éxito;
+- ambigüedad de loading;
+- ambigüedad de error;
+- claridad operativa.
+
+P2 después de RC solo si es polish cosmético y no afecta interpretación transaccional, proof de receipt/activity, claridad de pago/saldo, claridad demo/API ni scope V1.
 
 ### Última reconciliación administrativa
 
@@ -125,13 +167,14 @@ Uso esperado antes de PR:
 ./scripts/pre-pr-check.ps1
 ```
 
-La automatización refuerza gates. No aprueba financial safety, ledger, producción, dinero real ni scope de producto.
+La automatización refuerza gates. No aprueba financial safety, ledger, producción, dinero real, release público ni scope de producto.
 
 ### PRs e issues reconciliados
 
 - Issue #10 — closed / completed. Cierre administrativo con PR #11 como evidencia principal.
 - Issue #20 — closed / completed. Implementado por PR #24.
-- PR #22 — closed / not merged. No usar como evidencia de implementación. Razón: `changed_files: 0`, `additions: 0`, `deletions: 0`, patch vacío.
+- Issue #26 — closed / completed. V1 RC Freeze Plan.
+- PR #22 — closed / not merged. No usar como evidencia de implementación.
 - PR #23 — closed / not merged. Superseded por PR #24. No usar como evidencia de implementación.
 - PR #24 — closed / merged. Fuente de verdad para Issue #20.
 - PR #25 — closed / merged. Fuente de verdad para automation gates.
@@ -152,18 +195,14 @@ La automatización refuerza gates. No aprueba financial safety, ledger, producci
 - Phase 1.5 — Frontend API Integration for Transfers and Payment Requests.
 - Phase 1.8 / 1.8B — Payment Requests UX + Activity/Receipt Continuity Hardening, documented in `docs/phase-1-8-validation.md`.
 - Issue #20 — Receipt Proof Hardening, completed by PR #24.
+- Issue #26 — V1 Release Candidate Freeze Plan, completed as V1 RC Freeze.
 - Operational automation gates, installed by PR #25.
 
 ### Siguiente trabajo correcto
 
 No hay active implementation item.
 
-No iniciar nueva feature hasta que el Agent Orchestrator & Memory Manager seleccione la siguiente brecha real de V1 Readiness y la enrute por scope classification, required agents y Founder approval.
-
-Candidatos no autorizados todavía:
-
-- Demo hardening: edge cases, loading states, empty states, error states, copy and mobile clarity.
-- V1 release candidate freeze plan.
+En V1 RC Freeze, cualquier trabajo posterior requiere issue separado, clasificación, gates requeridos y Founder approval explícito.
 
 ## Reglas de producto V1
 
@@ -175,6 +214,7 @@ Candidatos no autorizados todavía:
 - Ninguna función demo debe presentarse como integración externa activa.
 - Android es la plataforma principal; iOS no es fase activa.
 - Un receipt no puede presentarse como comprobante válido si no viene de actividad backend confirmada o demo claramente simulada.
+- RC Freeze no equivale a producción, dinero real ni release público.
 
 ## Gates obligatorios
 
@@ -185,6 +225,7 @@ Candidatos no autorizados todavía:
 5. Mobile gate cuando haya superficie visual o Android/web asset impact.
 6. Founder approval gate.
 7. Post-merge validation gate cuando un PR de pagos ya fue mergeado sin evidencia final visible.
+8. RC sign-off gate antes de cualquier release candidate final.
 
 ## Comandos mínimos
 
@@ -225,6 +266,7 @@ Detener trabajo y reportar si aparece cualquiera de estos casos:
 - QR scanner/camera;
 - despliegue público no aprobado;
 - producción o dinero real;
+- release público no aprobado;
 - PR vacío tratado como evidencia;
 - reviewer de seguridad de pagos ausente en scope R3;
 - nueva feature sin issue, scope y gate frescos.
