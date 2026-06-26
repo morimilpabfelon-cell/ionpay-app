@@ -21,15 +21,36 @@ Regla central:
 
 ### Estado de control
 
-Estado actual: **V1 READINESS / POST-HARDENING RECONCILIATION**.
+Estado actual: **V1 READINESS / NO ACTIVE IMPLEMENTATION ITEM**.
 
 No hay producción pública ni dinero real.
 
 No hay active implementation item autorizado.
 
+Issue #10 está **closed / completed** como cierre administrativo. La evidencia principal es PR #11, que implementó Phase 1.3B — V1 Product Surface Lock.
+
 Issue #20 está **closed / completed**. El hardening de comprobantes fue implementado, revisado, aprobado y mergeado mediante PR #24.
 
 La automatización operativa base está instalada en `main` mediante PR #25.
+
+### Última reconciliación administrativa
+
+- **Issue #10 — Phase 1.3B — V1 Product Surface Lock**.
+- Estado: **closed / completed**.
+- Tipo de cierre: administrativo, sin nueva implementación.
+- Evidencia principal: PR #11.
+- PR #11 estado: closed / merged.
+- PR #11 merge SHA: `23000ce37286f21b4637fe4da45ad9c97c45c905`.
+- PR #11 head SHA: `baa8672747f883007e9bd23875ab9926eba7a6de`.
+- Refuerzo secundario: PR #13 — PEN-only backend / wallet exposure.
+- No usar como evidencia principal de Issue #10: PR #22, PR #23, PR #24, PR #25.
+
+Conclusión:
+
+- Issue #10 no abre nueva P1;
+- no queda post-V1;
+- no requiere implementación adicional;
+- V1 Product Surface Lock queda cerrado por evidencia histórica de PR #11.
 
 ### Última mejora de producto cerrada
 
@@ -71,10 +92,12 @@ Capacidades instaladas:
 
 La automatización refuerza gates. No aprueba seguridad financiera, ledger, producción, dinero real ni scope de producto.
 
-### PRs reconciliados
+### PRs e issues reconciliados
 
+- Issue #10: closed / completed. Cierre administrativo con PR #11 como evidencia principal.
+- Issue #20: closed / completed. Implementado por PR #24.
 - PR #22: closed / not merged. No usar como evidencia de implementación porque GitHub reportó `changed_files: 0`, `additions: 0`, `deletions: 0` y patch vacío.
-- PR #23: closed / not merged. Superseded por PR #24. No usar como evidencia de implementación de Issue #20.
+- PR #23: closed / not merged. Superseded por PR #24. No usar como evidencia de implementación.
 - PR #24: closed / merged. Fuente de verdad para Issue #20.
 - PR #25: closed / merged. Fuente de verdad para automation gates.
 
@@ -87,7 +110,7 @@ La automatización refuerza gates. No aprueba seguridad financiera, ledger, prod
 - Phase 1.2B — Backend V1 Surface Lock.
 - Phase 1.2C — Idempotency & Retry Safety.
 - Phase 1.3A — Payment Requests Foundation.
-- Phase 1.3B — V1 Product Surface Lock.
+- Phase 1.3B — V1 Product Surface Lock, implemented by PR #11 and administratively closed through Issue #10.
 - Phase 1.4 — Account, Wallet & Single Fiat Balance.
 - Phase 1.5 — Frontend API Integration for Transfers and Payment Requests.
 - Phase 1.8 / 1.8B — Payment Requests UX + Activity/Receipt Continuity Hardening, documented in `docs/phase-1-8-validation.md`.
@@ -96,36 +119,21 @@ La automatización refuerza gates. No aprueba seguridad financiera, ledger, prod
 
 ## Próximo trabajo correcto
 
-### P0.3 — Reconciliar Issue #10: V1 Product Surface Lock
+No hay active implementation item.
 
-Issue #10 sigue abierto y debe ser clasificado antes de iniciar nueva feature.
+Antes de cualquier nueva implementación, el Agent Orchestrator & Memory Manager debe seleccionar y clasificar la siguiente brecha real de V1 Readiness.
 
-Resultado esperado de clasificación:
+Candidatos no autorizados todavía:
 
-```text
-A. Issue #10 ya está satisfecho por el estado actual → cerrar con evidencia.
-B. Issue #10 sigue abierto como hardening de superficie → convertir en próxima tarea P1.
-C. Issue #10 queda post-V1 → Founder + Product Architect + Scope Guardian deben aprobar.
-```
+- Demo hardening: edge cases, loading states, empty states, error states, copy and mobile clarity.
+- V1 release candidate freeze plan.
 
-Agentes requeridos:
-
-- Product Architect;
-- Scope Guardian;
-- Founder approval.
-
-Condicionales:
-
-- Frontend Surface Reviewer si se requieren cambios visuales o de claridad mobile;
-- Financial Safety Reviewer si se toca copy o UI que pueda sugerir saldo, pagos reales, recibos válidos, producción o dinero real.
-
-No iniciar feature nueva hasta resolver la clasificación de Issue #10.
+Ningún candidato anterior autoriza código por sí mismo.
 
 ## Roadmap V1 pendiente
 
-Sujeto a reconciliar Issue #10:
+Pendiente de clasificación y gates frescos:
 
-- V1 Product Surface Lock final.
 - Demo hardening: edge cases, loading states, empty states, error states, copy and mobile clarity.
 - V1 release candidate freeze.
 
