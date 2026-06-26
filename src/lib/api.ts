@@ -125,6 +125,13 @@ async function request<T>(path: string, options: RequestInit = {}, authenticated
       : (body.error?.message || 'No se pudo completar la solicitud.')
     throw new IonPayApiError(response.status, code, message)
   }
+  if (body.error) {
+    throw new IonPayApiError(
+      response.status,
+      body.error.code || 'API_ERROR',
+      body.error.message || 'No se pudo completar la solicitud.',
+    )
+  }
   return body
 }
 
