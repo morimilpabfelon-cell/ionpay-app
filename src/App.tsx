@@ -33,6 +33,7 @@ type AppMode = 'checking' | 'signed-out' | 'api' | 'demo'
 type ProofMode = 'api' | 'demo'
 type PaymentRequestState = { received: PaymentRequest[]; created: PaymentRequest[] }
 type ToastState = { message: string; variant: 'success' | 'error' } | null
+type ReceiptAvailability = { canOpen: boolean; label: string; reason: string; reference: string }
 
 const emptyPaymentRequests: PaymentRequestState = { received: [], created: [] }
 
@@ -82,9 +83,34 @@ function validAmount(value: string) {
 }
 
 function confirmedTransaction(transactions: Transaction[], response: MoneyOperationResponse) {
+  const backendId = response.transaction?.id
   const reference = response.transaction?.reference
-  if (!reference) return null
-  return transactions.find((transaction) => transaction.id === reference) ?? null
+  if (!backendId && !reference) return null
+  return transactions.find((transaction) => (
+    (reference && transaction.id === reference)
+    || (reference && transaction.backendReference === reference)
+    || (backendId && transaction.backendId === backendId)
+  )) ?? null
+}
+
+function proofReference(item: Transaction) {
+  return item.backendId || item.backendReference || item.id
+}
+
+function receiptAvailability(item: Transaction, mode: ProofMode): ReceiptAvailability {
+  const reference = proofReference(item)
+  if (item.currency !== 'PEN') return { canOpen: false, label: 'Recibo no disponible', reason: 'Solo activity PEN puede abrir recibo en V1.', reference }
+  if (item.status !== 'Completado') return { canOpen: false, label: 'Recibo no disponible', reason: 'Activity todavía no está completada.', reference }
+  if (mode === 'api' && (item.proofSource !== 'api' || !item.backendId || item.receiptAvailable === false)) {
+    return { canOpen: false, label: 'Recibo no disponible', reason: item.receiptUnavailableReason || 'Falta confirmación API suficiente.', reference }
+  }
+  if (mode === 'demo' && item.proofSource === 'api') return { canOpen: false, label: 'Recibo no disponible', reason: 'Registro API fuera de modo demo.', reference }
+  if (item.receiptAvailable === false) return { canOpen: false, label: 'Recibo no disponible', reason: item.receiptUnavailableReason || 'Recibo no disponible.', reference }
+  return { canOpen: true, label: mode === 'api' ? 'Recibo disponible' : 'Recibo demo', reason: mode === 'api' ? 'Activity completada y confirmada por API.' : 'Demo completada y simulada.', reference }
+}
+
+function canOpenReceipt(item: Transaction, mode: ProofMode) {
+  return receiptAvailability(item, mode).canOpen
 }
 
 function proofLabel(mode: ProofMode) {
@@ -156,17 +182,20 @@ function TransactionIcon({ kind }: { kind: TransactionKind }) {
   return <span className="transaction-icon outgoing"><ArrowUpIcon /></span>
 }
 
-function TransactionRow({ item, mode, onOpen }: { item: Transaction; mode: ProofMode; onOpen: () => void }) {
+function TransactionRow({ item, mode, onOpen }: { item: Transaction; mode: ProofMode; onOpen: (item: Transaction) => void }) {
   const sign = item.direction === 'in' ? '+' : item.direction === 'out' ? '−' : ''
+  const availability = receiptAvailability(item, mode)
+  const rowClass = `transaction-row proof-row ${availability.canOpen ? '' : 'receipt-unavailable'}`.trim()
+
   return (
-    <button className="transaction-row proof-row" onClick={onOpen} aria-label={`Abrir registro de actividad ${item.id}`}>
+    <button className={rowClass} onClick={() => availability.canOpen && onOpen(item)} disabled={!availability.canOpen} aria-label={availability.canOpen ? `Abrir recibo ${availability.reference}` : availability.reason}>
       <TransactionIcon kind={item.kind} />
       <span className="transaction-main">
         <strong>{item.counterpart}</strong>
         <small>{item.title} · {shortDate(item.createdAt)}</small>
-        <span className={`proof-pill ${mode}`}>{proofLabel(mode)} · ref {item.id}</span>
+        <span className={`proof-pill ${availability.canOpen ? mode : 'unavailable'}`}>{availability.label} · ref {availability.reference}</span>
       </span>
-      <span className={`transaction-amount ${item.direction}`}><strong>{sign}{money(item.amount, item.currency)}</strong><small>{item.status}</small></span>
+      <span className={`transaction-amount ${item.direction}`}><strong>{sign}{money(item.amount, item.currency)}</strong><small>{availability.canOpen ? item.status : 'Sin recibo'}</small></span>
     </button>
   )
 }
@@ -177,7 +206,8 @@ function EmptyActivity() {
 
 function ActivityProofSummary({ transactions, mode }: { transactions: Transaction[]; mode: ProofMode }) {
   const completed = transactions.filter((item) => item.status === 'Completado').length
-  const lastReference = transactions[0]?.id ?? 'Sin referencia'
+  const receiptsAvailable = transactions.filter((item) => canOpenReceipt(item, mode)).length
+  const lastReference = transactions[0] ? proofReference(transactions[0]) : 'Sin referencia'
 
   return (
     <section className={`activity-proof-card ${mode}`}>
@@ -189,6 +219,7 @@ function ActivityProofSummary({ transactions, mode }: { transactions: Transactio
       <div className="proof-metrics">
         <div><span>Movimientos visibles</span><strong>{transactions.length}</strong></div>
         <div><span>Completados</span><strong>{completed}</strong></div>
+        <div><span>Recibos disponibles</span><strong>{receiptsAvailable}</strong></div>
         <div><span>Última referencia</span><strong>{lastReference}</strong></div>
       </div>
     </section>
@@ -213,7 +244,7 @@ function Home({ state, mode, setAction, setTab, openReceipt }: { state: IonState
         <div>
           <BalanceCard state={state} visible={visible} setVisible={setVisible} />
           <section className="quick-actions" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>{actions.map(({ id, label, Icon, run }) => <button key={id} onClick={run}><span><Icon /></span><strong>{label}</strong></button>)}</section>
-          <section className="section-card activity-preview"><div className="section-title"><div><span className="eyebrow">Movimientos</span><h2>Actividad reciente</h2></div><button onClick={() => setTab('activity')}>Ver todo <ChevronIcon /></button></div><div>{transactions.length ? transactions.slice(0, 4).map((item) => <TransactionRow key={item.id} item={item} mode={mode} onOpen={() => openReceipt(item)} />) : <EmptyActivity />}</div></section>
+          <section className="section-card activity-preview"><div className="section-title"><div><span className="eyebrow">Movimientos</span><h2>Actividad reciente</h2></div><button onClick={() => setTab('activity')}>Ver todo <ChevronIcon /></button></div><div>{transactions.length ? transactions.slice(0, 4).map((item) => <TransactionRow key={item.id} item={item} mode={mode} onOpen={openReceipt} />) : <EmptyActivity />}</div></section>
         </div>
         <aside className="home-aside"><section className="account-status"><div className="section-title compact"><div><span className="eyebrow">Tu cuenta</span><h2>Estado</h2></div><ShieldIcon /></div><div className="status-row"><span className={`status-dot ${state.user!.kycStatus === 'Verificado' ? 'verified' : ''}`}><CheckIcon /></span><div><strong>Identidad {state.user!.kycStatus === 'Verificado' ? 'verificada' : 'pendiente'}</strong><small>{state.user!.kycStatus === 'Verificado' ? 'Tu cuenta está lista para operar' : 'Verificación pendiente para futuras funciones'}</small></div></div><div className="notice-box"><strong>V1 enfocada en pagos internos</strong><p>Saldo fiat PEN, envíos, cobros, solicitudes de pago, historial y registros internos de actividad.</p></div></section></aside>
       </div>
@@ -236,7 +267,7 @@ function ActivityPage({ transactions, mode, openReceipt }: { transactions: Trans
       <div className="page-heading"><span className="eyebrow">Ion Activity</span><h1>Tu actividad</h1><p>{mode === 'api' ? 'Consulta movimientos PEN confirmados por la API local.' : 'Consulta movimientos PEN simulados en modo demo.'}</p></div>
       <ActivityProofSummary transactions={visibleTransactions} mode={mode} />
       <div className="activity-tools"><label className="search-box"><SearchIcon /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar movimiento o referencia" /></label><div className="filter-chips">{([['all', 'Todos'], ['receive', 'Recibidos'], ['send', 'Enviados'], ['payment', 'Pagos']] as const).map(([id, label]) => <button key={id} className={filter === id ? 'active' : ''} onClick={() => setFilter(id)}>{label}</button>)}</div></div>
-      <div className="section-card full-list">{filtered.length ? filtered.map((item) => <TransactionRow key={item.id} item={item} mode={mode} onOpen={() => openReceipt(item)} />) : <EmptyActivity />}</div>
+      <div className="section-card full-list">{filtered.length ? filtered.map((item) => <TransactionRow key={item.id} item={item} mode={mode} onOpen={openReceipt} />) : <EmptyActivity />}</div>
     </section>
   )
 }
@@ -345,11 +376,29 @@ function ReceivePanel({ user }: { user: IonUser }) {
 
 function ReceiptModal({ item, mode, onClose }: { item: Transaction; mode: ProofMode; onClose: () => void }) {
   const sign = item.direction === 'in' ? '+' : item.direction === 'out' ? '−' : ''
+  const availability = receiptAvailability(item, mode)
   const isCompleted = item.status === 'Completado'
   const proofTitle = mode === 'api' ? 'API local · no es comprobante bancario ni release de producción' : 'Demo local · no mueve dinero real'
   const proofDescription = mode === 'api'
     ? 'Registro de actividad confirmado por backend local dentro de ionPAY V1.'
     : 'Registro de actividad generado por demo local para revisión visual.'
+
+  if (!availability.canOpen) {
+    return (
+      <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+        <section className={`modal receipt receipt-${mode}`} role="dialog" aria-modal="true" aria-label={`Recibo no disponible ${availability.reference}`}>
+          <button className="modal-close" onClick={onClose}><CloseIcon /></button>
+          <div className={`receipt-proof-banner ${mode}`}><ShieldIcon /><span><strong>Recibo no disponible</strong><small>{availability.reason}</small></span></div>
+          <div className="status-mark neutral"><ShieldIcon /></div>
+          <span className="eyebrow">Activity proof · bloqueado</span>
+          <h2>Recibo no disponible</h2>
+          <div className="receipt-status-label neutral">{item.status}</div>
+          <div className="receipt-details proof-details"><div><span>Moneda pública</span><strong>{item.currency}</strong></div><div><span>Referencia</span><strong>{availability.reference}</strong></div></div>
+          <button className="secondary-button" onClick={onClose}>Cerrar</button>
+        </section>
+      </div>
+    )
+  }
 
   return (
     <div className="modal-backdrop" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -369,7 +418,8 @@ function ReceiptModal({ item, mode, onClose }: { item: Transaction; mode: ProofM
           <div><span>Contraparte</span><strong>{item.counterpart}</strong></div>
           <div><span>Fecha y hora</span><strong>{fullDate(item.createdAt)}</strong></div>
           <div><span>Canal</span><strong>{item.channel}</strong></div>
-          <div><span>Referencia</span><strong>{item.id}</strong></div>
+          {mode === 'api' && <div><span>ID backend</span><strong>{item.backendId}</strong></div>}
+          <div><span>Referencia</span><strong>{item.backendReference || item.id}</strong></div>
           {item.note && <div><span>Nota</span><strong>{item.note}</strong></div>}
         </div>
         <div className="receipt-warning"><strong>Recibo interno ionPAY V1</strong><span>{mode === 'api' ? 'No es comprobante bancario ni release de producción.' : 'Demo local: no prueba movimiento financiero real.'}</span></div>
@@ -472,9 +522,11 @@ export default function App() {
 
   const addDemoTransaction = (transaction: Transaction, penChange: number, usdtChange = 0) => {
     if (mode !== 'demo') return
-    setState((current) => ({ ...current, wallet: { pen: Math.max(0, current.wallet.pen + penChange), usdt: Math.max(0, current.wallet.usdt + usdtChange) }, transactions: [transaction, ...current.transactions] }))
+    const receiptAvailable = transaction.status === 'Completado' && transaction.currency === 'PEN'
+    const nextTransaction: Transaction = { ...transaction, proofSource: 'demo', receiptAvailable, receiptUnavailableReason: receiptAvailable ? undefined : 'Recibo demo no disponible.' }
+    setState((current) => ({ ...current, wallet: { pen: Math.max(0, current.wallet.pen + penChange), usdt: Math.max(0, current.wallet.usdt + usdtChange) }, transactions: [nextTransaction, ...current.transactions] }))
     setAction(null)
-    setReceipt(transaction)
+    if (canOpenReceipt(nextTransaction, 'demo')) setReceipt(nextTransaction)
     flash('Simulación registrada')
   }
 
@@ -487,9 +539,11 @@ export default function App() {
       const nextState = await loadApiState()
       const confirmed = confirmedTransaction(v1Transactions(nextState.transactions), response)
       setAction(null)
-      if (confirmed) {
+      if (confirmed && canOpenReceipt(confirmed, 'api')) {
         setReceipt(confirmed)
         flash(`${successMessage}: ${confirmed.status}`)
+      } else if (confirmed) {
+        flash(receiptAvailability(confirmed, 'api').reason, 'error')
       } else {
         flash('Backend registró la operación. Actividad recargada sin registro local.')
       }
@@ -561,6 +615,14 @@ export default function App() {
   }
 
   const proofMode: ProofMode = mode === 'demo' ? 'demo' : 'api'
+  const openReceipt = (item: Transaction) => {
+    const availability = receiptAvailability(item, proofMode)
+    if (!availability.canOpen) {
+      flash(availability.reason, 'error')
+      return
+    }
+    setReceipt(item)
+  }
 
   return (
     <div className="app-shell">
@@ -568,8 +630,8 @@ export default function App() {
       <main className="app-content">
         {mode === 'demo' && <div className="demo-caption">Modo demo · fondos simulados · no mueve dinero real</div>}
         {mode === 'api' && <div className="api-caption"><ShieldIcon /> API local · actividad y registros dependen de backend</div>}
-        {tab === 'home' && <Home state={state} mode={proofMode} setAction={setAction} setTab={setTab} openReceipt={setReceipt} />}
-        {tab === 'activity' && <ActivityPage transactions={state.transactions} mode={proofMode} openReceipt={setReceipt} />}
+        {tab === 'home' && <Home state={state} mode={proofMode} setAction={setAction} setTab={setTab} openReceipt={openReceipt} />}
+        {tab === 'activity' && <ActivityPage transactions={state.transactions} mode={proofMode} openReceipt={openReceipt} />}
         {tab === 'services' && <ServicesPage state={state} paymentRequests={paymentRequests} openAction={(next) => setAction(next)} onPayRequest={payPaymentRequestFromServices} onCancelRequest={cancelPaymentRequestFromServices} processingRequestId={processingRequestId} requestOperationPending={Boolean(processingRequestId)} />}
         {tab === 'profile' && <ProfilePage user={state.user} onReset={reset} logoutLabel={mode === 'demo' ? 'Salir y borrar datos demo' : 'Cerrar sesión'} />}
       </main>
