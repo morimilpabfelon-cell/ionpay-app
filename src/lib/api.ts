@@ -1,4 +1,4 @@
-import type { ApiError, Balance, Currency, PaymentRequest, PaymentRequestStatus, Session, Transaction, User } from '../types'
+import type { ApiError, Balance, Currency, PaymentRequest, PaymentRequestStatus, Session, Transaction, TransactionStatus, User } from '../types'
 
 const API_URL = (import.meta.env.VITE_IONPAY_API_URL || 'http://127.0.0.1:8787').replace(/\/$/, '')
 const SESSION_KEY = 'ionpay-api-session-v1'
@@ -11,7 +11,7 @@ interface ActivityItem {
   id: string
   reference: string
   type: 'TRANSFER' | 'PAYMENT_REQUEST_PAYMENT' | 'CONVERSION' | 'DEMO_FUNDING' | string
-  status: 'COMPLETED' | 'PENDING' | string
+  status: 'COMPLETED' | 'PENDING' | 'FAILED' | string
   currency: Currency
   amount: number
   metadata: Record<string, unknown>
@@ -132,6 +132,30 @@ function stringMetadata(value: unknown, fallback = '') {
   return typeof value === 'string' && value ? value : fallback
 }
 
+function mapActivityStatus(status: string): TransactionStatus {
+  if (status === 'COMPLETED') return 'Completado'
+  if (status === 'FAILED') return 'Fallido'
+  return 'Pendiente'
+}
+
+function receiptUnavailableReason(item: ActivityItem) {
+  if (item.currency !== 'PEN') return 'Recibo no disponible: moneda fuera de V1.'
+  if (item.status !== 'COMPLETED') return 'Recibo no disponible: actividad sin confirmación completada.'
+  if (!item.id) return 'Recibo no disponible: falta ID backend.'
+  return undefined
+}
+
+function activityProof(item: ActivityItem) {
+  const unavailableReason = receiptUnavailableReason(item)
+  return {
+    backendId: item.id,
+    backendReference: item.reference,
+    proofSource: 'api' as const,
+    receiptAvailable: !unavailableReason,
+    receiptUnavailableReason: unavailableReason,
+  }
+}
+
 function mapActivity(items: ActivityItem[]): Transaction[] {
   const visibleItems = items.filter((item) => item.currency === 'PEN' && item.type !== 'CONVERSION')
 
@@ -142,18 +166,21 @@ function mapActivity(items: ActivityItem[]): Transaction[] {
     const senderAlias = stringMetadata(metadata.senderAlias, 'remitente')
     const requesterAlias = stringMetadata(metadata.requesterAlias, 'solicitante')
     const payerAlias = stringMetadata(metadata.payerAlias, 'pagador')
+    const status = mapActivityStatus(item.status)
+    const proof = activityProof(item)
 
     if (item.type === 'PAYMENT_REQUEST_PAYMENT') {
       const outgoing = direction === 'out'
       return {
         id: item.reference,
+        ...proof,
         kind: outgoing ? 'payment' : 'receive',
         title: outgoing ? 'Pago realizado' : 'Cobro recibido',
         counterpart: `@${outgoing ? requesterAlias : payerAlias}`,
         amount: Math.abs(item.amount),
         currency: 'PEN',
         direction,
-        status: item.status === 'COMPLETED' ? 'Completado' : 'Pendiente',
+        status,
         channel: 'IONPAY API',
         createdAt: item.createdAt,
         note: stringMetadata(metadata.note) || undefined,
@@ -163,13 +190,14 @@ function mapActivity(items: ActivityItem[]): Transaction[] {
     if (item.type === 'DEMO_FUNDING') {
       return {
         id: item.reference,
+        ...proof,
         kind: 'receive',
         title: 'Saldo demo recibido',
         counterpart: 'Fondeo de demostración',
         amount: Math.abs(item.amount),
         currency: 'PEN',
         direction: 'in',
-        status: item.status === 'COMPLETED' ? 'Completado' : 'Pendiente',
+        status,
         channel: 'IONPAY API',
         createdAt: item.createdAt,
         note: stringMetadata(metadata.note) || undefined,
@@ -178,13 +206,14 @@ function mapActivity(items: ActivityItem[]): Transaction[] {
 
     return {
       id: item.reference,
+      ...proof,
       kind: direction === 'out' ? 'send' : 'receive',
       title: direction === 'out' ? 'Dinero enviado' : 'Dinero recibido',
       counterpart: `@${direction === 'out' ? recipientAlias : senderAlias}`,
       amount: Math.abs(item.amount),
       currency: 'PEN',
       direction,
-      status: item.status === 'COMPLETED' ? 'Completado' : 'Pendiente',
+      status,
       channel: 'IONPAY API',
       createdAt: item.createdAt,
       note: stringMetadata(metadata.note) || undefined,
