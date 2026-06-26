@@ -1,7 +1,8 @@
 export type Currency = 'PEN' | 'USDT'
 export type V1Currency = 'PEN'
 export type TransactionKind = 'receive' | 'send' | 'payment' | 'conversion'
-export type TransactionStatus = 'Completado' | 'Pendiente' | 'En revisión'
+export type TransactionStatus = 'Completado' | 'Pendiente' | 'En revisión' | 'Fallido'
+export type TransactionProofSource = 'api' | 'demo' | 'local'
 
 export type ApiKycStatus = 'PENDING' | 'VERIFIED'
 export type PaymentRequestStatus = 'PENDING' | 'PAID' | 'CANCELLED' | 'EXPIRED'
@@ -45,6 +46,11 @@ export interface Wallet {
 
 export interface Transaction {
   id: string
+  backendId?: string
+  backendReference?: string
+  proofSource?: TransactionProofSource
+  receiptAvailable?: boolean
+  receiptUnavailableReason?: string
   kind: TransactionKind
   title: string
   counterpart: string
