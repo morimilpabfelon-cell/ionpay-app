@@ -2,95 +2,115 @@
 
 ## Objetivo
 
-IONPAY es una billetera financiera Android-first del ecosistema Ion. Debe construirse por fases: primero núcleo seguro, después integración de flujos, luego validación móvil y producción solo al final.
+IONPAY es una billetera Android-first del ecosistema Ion. Debe construirse por fases: primero núcleo seguro, después integración de flujos, luego validación móvil, y despliegue público solo al final.
 
-Regla central: no construir wallet, pagos, QR, comercio, Android, iOS, exchange, tarjetas y productos financieros al mismo tiempo.
+Regla central: no construir wallet, pagos, QR, comercio, Android, iOS, exchange, tarjetas y módulos avanzados al mismo tiempo.
 
 ## Reglas institucionales
 
 - Ningún agente trabaja desde cero ni inventa dirección.
-- Antes de ejecutar, consultar estado operativo vigente, `AGENTS.md`, `README.md`, GitHub y Notion cuando aplique.
-- Toda tarea debe tener fase, alcance, prioridad, riesgo, gate y condición de salida.
-- Codex no decide producto, no aprueba seguridad financiera y no revisa su propio trabajo.
-- Operating Executor coordina; no aprueba seguridad financiera.
+- Antes de ejecutar, consultar estado operativo vigente, `AGENTS.md`, `README.md`, GitHub y memoria externa `ionpay-ops-memory` cuando aplique.
+- Toda tarea debe tener fase o gap activo, alcance, prioridad, riesgo, gate y condición de salida.
+- Codex no está activo para este proyecto.
+- Codex no decide producto, no aprueba seguridad de saldos y no revisa su propio trabajo.
+- Operating Executor coordina y ejecuta trabajo autorizado, pero no aprueba seguridad de saldos.
+- Product Architect define alcance y orden; no implementa código.
+- Scope Guardian bloquea scope creep y define archivos permitidos/bloqueados.
 - Software Engineer audita y prepara instrucciones; no autoriza merge por sí solo.
-- Financial Safety Reviewer revisa wallet, saldo, transferencias, cobros, idempotency y estados financieros.
-- Frontend Surface Reviewer revisa UI, errores, claridad y riesgo de falso éxito.
-- Founder approval es obligatorio antes de merge final o release.
-- Si un PR financiero se mergea sin evidencia visible completa, el estado pasa a HOLD hasta cerrar post-merge validation.
+- Financial Safety Reviewer revisa wallet, saldo, transferencias, cobros, idempotency, receipts y estados de pago.
+- Frontend Surface Reviewer revisa UI, errores, claridad, mobile usability y riesgo de falso éxito.
+- Founder approval es obligatorio antes de merge final, cierre de fase o release.
+- Si un PR de saldo/pagos se mergea sin evidencia visible completa, el estado pasa a HOLD hasta cerrar post-merge validation.
 
 ## Memoria operativa obligatoria
 
 Antes de iniciar cualquier tarea, consultar o reconstruir:
 
-1. ionPAY Agent Operating System / Orchestrator.
-2. 01_Project State.
-3. 02_Task Pipeline.
-4. 05_Risk Register.
-5. Último Context Packet relevante.
-6. Último Handoff relevante.
-7. `AGENTS.md`.
-8. `README.md`.
-9. GitHub si afecta código, issues, PRs, branches o validación.
-10. Notion si afecta producto, alcance, gates, roadmap o estado operativo.
+1. `README.md`.
+2. `AGENTS.md`.
+3. Issue/PR activo de GitHub.
+4. Último documento de validación en `docs/`.
+5. Memoria externa `morimilpabfelon-cell/ionpay-ops-memory` cuando haya duda de estado.
+6. `STATE.md`, `CURRENT_PHASE.md`, `OPS_INDEX.json` y gate activo en `ionpay-ops-memory` si la tarea afecta planificación, gates o reconciliación.
 
-Si no existe Context Packet o Handoff suficiente, generarlo antes de enrutar trabajo.
+Si no existe handoff suficiente, generar reporte antes de enrutar trabajo.
 
 ## Estado operativo actual
 
-### Últimas fases cerradas
+### Estado de control
 
+Estado actual: **RECONCILED WITH ACTIVE HARDENING GAP**.
+
+No hay despliegue público de pagos.
+
+Producto en `main` avanzó hasta Phase 1.8 / 1.8B, pero sigue abierto un gap R3 de receipt/activity proof en Issue #20.
+
+### Última mejora validada documentada
+
+- Phase 1.8 / 1.8B — Payment Requests UX + Activity/Receipt Continuity Hardening.
+- Estado documentado: VALIDATED + REVIEWED + FOUNDER-AUTHORIZED PHASE CLOSURE.
+- Documento: `docs/phase-1-8-validation.md`.
+- Commit de implementación registrado: `c8a7118f06a353bde56672ea9f1d1e27e3a9adca`.
+- Commit final registrado: `bec6ccd1aa2fa87d5e0be732a25e24dba5e026aa`.
+- Archivo principal de implementación: `src/components/ServicesPage.tsx`.
+
+### Gap activo
+
+Issue activo:
+
+- Issue #20 — Receipt Proof Hardening — explicit confirmed-activity gate.
+- Estado: open / active hardening gap.
+- Riesgo: R3 — proof integrity risk.
+- Review requerido: Financial Safety Reviewer + Frontend Surface Reviewer + Founder approval.
+
+Objetivo:
+
+- receipt solo desde actividad backend confirmada/completada;
+- no receipt para pending, failed, missing confirmation o estado local-only en API mode;
+- demo claramente simulada;
+- PEN-only público;
+- no conversions.
+
+### PR cerrado durante reconciliación
+
+- PR #22 — Closed: Phase 1.6 receipt proof PR had no effective diff.
+- Estado: closed / not merged.
+- No usar como evidencia de implementación.
+- Razón: `changed_files: 0`, `additions: 0`, `deletions: 0`, patch vacío.
+
+## Roadmap operativo
+
+### Completadas / documentadas
+
+- Phase 0.1 — Agent Operating System.
+- Phase 1.1A — Onboarding structure.
+- Phase 1.1B — V1 Scope Lock UI.
+- Phase 1.2A — Core Hardening.
+- Phase 1.2B — Backend V1 Surface Lock.
+- Phase 1.2C — Idempotency & Retry Safety.
+- Phase 1.3A — Payment Requests Foundation.
+- Phase 1.3B — V1 Product Surface Lock.
 - Phase 1.4 — Account, Wallet & Single Fiat Balance.
-- Estado: MERGED + POST-MERGE VALIDATED.
 - Phase 1.5 — Frontend API Integration for Transfers and Payment Requests.
-- Estado: MERGED + POST-MERGE VALIDATED.
-- Issue: #16.
-- PR: #17.
-- PR status: closed / merged.
-- Merge commit: `e17624c997178edbe10831fa26b4de0f1d21751a`.
-- Head commit revisado por R3: `1034b76249086a5889a974630fa39a2233d8c483`.
+- Phase 1.8 / 1.8B — Payment Requests UX + Activity/Receipt Continuity Hardening, documented in `docs/phase-1-8-validation.md`.
 
-### Validación post-merge Phase 1.5
+### Siguiente trabajo correcto
 
-Evidencia local documentada en Issue #16:
+Issue #20 — Receipt Proof Hardening.
 
-- `pnpm build`: PASS.
-- `pnpm api:test`: PASS, 22/22.
-- `pnpm android:sync`: PASS.
-- `git diff --check`: PASS, solo warnings CRLF de Android.
-- `git status`: PASS, working tree clean.
+No iniciar nueva feature hasta que Issue #20 sea:
 
-Revisión manual mobile confirmada por el usuario fundador:
+- implementado y cerrado con evidencia; o
+- explícitamente pospuesto como post-V1 por Founder + Product Architect + Scope Guardian.
 
-- viewport alrededor de 390x844: PASS;
-- registro/login: PASS;
-- wallet PEN: PASS;
-- activity: PASS;
-- crear solicitud de pago: PASS;
-- pagar solicitud: PASS;
-- cancelar solicitud: PASS;
-- doble click rápido en enviar/pagar/crear/cancelar: PASS;
-- errores backend visibles: PASS;
-- no falso éxito: PASS;
-- no USDT público: PASS;
-- no conversions: PASS;
-- demo separada como simulación: PASS.
+## Scope para Issue #20
 
-Resultado:
-
-- Phase 1.5 queda cerrada como MERGED + POST-MERGE VALIDATED.
-- Phase 1.6 queda lista para Scope Guardian gate.
-- No iniciar Codex para Phase 1.6 hasta tener Scope Guardian output.
-
-### Alcance de PR #17
-
-Permitido y aplicado:
+Permitido:
 
 - `src/App.tsx`;
-- `src/components/ServicesPage.tsx`;
 - `src/lib/api.ts`;
-- `src/styles.css`;
-- `src/types.ts`.
+- `src/types.ts`;
+- `src/styles.css`.
 
 Bloqueado salvo gate separado:
 
@@ -98,50 +118,16 @@ Bloqueado salvo gate separado:
 - DB/schema/migrations;
 - ledger;
 - money parser;
-- auth financiero;
+- auth de pagos;
 - `package.json`;
 - `pnpm-lock.yaml`;
 - `android/**`;
-- Figma;
-- Notion;
-- producción;
-- dinero real.
-
-### Estado de revisión Phase 1.5
-
-- R3 inicial: blocking / request changes operacional.
-- R3 re-review: APPROVED WITH CONDITIONS.
-- Command validation: COMPLETE.
-- Manual mobile validation: COMPLETE.
-- Final status: MERGED + POST-MERGE VALIDATED.
-
-## Roadmap operativo
-
-### Completadas
-
-- Phase 0.1 — Agent Operating System.
-- Phase 1.1A — Onboarding structure.
-- Phase 1.1B — V1 Scope Lock UI.
-- Phase 1.2A — Financial Core Hardening.
-- Phase 1.2B — Backend V1 Surface Lock.
-- Phase 1.2C — Idempotency & Retry Safety.
-- Phase 1.3A — Payment Requests Foundation.
-- Phase 1.3B — V1 Product Surface Lock.
-- Phase 1.4 — Account, Wallet & Single Fiat Balance.
-- Phase 1.5 — Frontend API Integration for Transfers and Payment Requests.
-
-### Siguiente fase candidata
-
-- Phase 1.6 — Receipts and activity proof.
-- Estado: lista para Scope Guardian gate.
-- No ejecutar todavía sin clasificación IN/OUT, prioridad, riesgo, archivos permitidos, archivos bloqueados, acceptance criteria y reviewer requerido.
-
-### Siguientes fases V1
-
-- Phase 1.7 — Basic QR display for payment requests, without camera scanner.
-- Phase 1.8 — Basic merchant mode.
-- Phase 1.9 — Demo hardening.
-- Phase 1.10 — V1 release candidate freeze.
+- `ios/**`;
+- QR scanner;
+- camera;
+- public USDT;
+- conversions;
+- despliegue público.
 
 ## Reglas de producto V1
 
@@ -150,8 +136,9 @@ Bloqueado salvo gate separado:
 - No presentar USDT como medio de pago cotidiano.
 - No habilitar conversions en V1 salvo decisión explícita posterior.
 - Backend es fuente de verdad para wallet, saldo, activity, transfers y payment requests.
-- Ninguna función demo debe presentarse como integración financiera real.
+- Ninguna función demo debe presentarse como integración externa activa.
 - Android es la plataforma principal; iOS no es fase activa.
+- Un receipt no puede presentarse como comprobante válido si no viene de actividad backend confirmada o demo claramente simulada.
 
 ## Gates obligatorios
 
@@ -161,7 +148,16 @@ Bloqueado salvo gate separado:
 4. Frontend review gate.
 5. Mobile gate.
 6. Founder approval gate.
-7. Post-merge validation gate cuando un PR financiero ya fue mergeado sin evidencia final visible.
+7. Post-merge validation gate cuando un PR de pagos ya fue mergeado sin evidencia final visible.
+
+Para Issue #20, los gates mínimos son:
+
+- Scope Guardian confirmation;
+- Financial Safety Reviewer;
+- Frontend Surface Reviewer;
+- command validation;
+- mobile validation around 390x844;
+- founder closure.
 
 ## Comandos mínimos
 
@@ -177,8 +173,22 @@ git diff --check
 
 1. Ejecutar `pnpm build`.
 2. Ejecutar `pnpm api:test` si se toca backend, auth, wallet, saldo, ledger, transfers o payment requests.
-3. Ejecutar `pnpm api:test` cuando frontend invoque rutas financieras, aunque `server/**` no cambie.
+3. Ejecutar `pnpm api:test` cuando frontend invoque rutas de pagos, aunque `server/**` no cambie.
 4. Probar pantallas modificadas en tamaño móvil.
 5. Ejecutar `pnpm android:sync` cuando cambios web deban llegar al APK.
 6. Ejecutar `git diff --check`.
-7. Reportar fase, issue/PR, archivos, comandos, resultados, riesgos restantes y revisor requerido.
+7. Reportar fase/gap, issue/PR, archivos, comandos, resultados, riesgos restantes y revisor requerido.
+
+## Stop conditions
+
+Detener trabajo y reportar si aparece cualquiera de estos casos:
+
+- cambios en backend, ledger, DB, auth, package, lockfile o Android sin gate;
+- receipt para estado pending/failed/missing confirmation;
+- falso éxito;
+- public USDT;
+- conversions públicas;
+- QR scanner/camera;
+- despliegue público no aprobado;
+- PR vacío tratado como evidencia;
+- reviewer de seguridad de pagos ausente en scope R3.
