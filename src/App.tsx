@@ -82,9 +82,9 @@ function validAmount(value: string) {
 }
 
 function confirmedTransaction(transactions: Transaction[], response: MoneyOperationResponse) {
-  const reference = response.transaction?.reference
+  const reference = response.transaction?.reference ?? response.transaction?.id
   if (!reference) return null
-  return transactions.find((transaction) => transaction.id === reference) ?? null
+  return transactions.find((transaction) => transaction.id === reference || transaction.backendId === reference) ?? null
 }
 
 function proofLabel(mode: ProofMode) {
@@ -95,6 +95,23 @@ function proofDetail(mode: ProofMode) {
   return mode === 'api'
     ? 'Registro confirmado por backend local. El saldo no fue inferido por UI.'
     : 'Registro generado por demo local. No representa dinero real ni confirmación backend.'
+}
+
+function canOpenReceipt(item: Transaction, mode: ProofMode) {
+  const isV1Public = item.currency === 'PEN' && item.kind !== 'conversion'
+  const isCompleted = item.status === 'Completado'
+  const hasReference = Boolean(item.id)
+  const hasApiProof = mode === 'demo' || item.channel.toUpperCase().includes('API')
+
+  return isV1Public && isCompleted && hasReference && hasApiProof
+}
+
+function receiptUnavailableReason(item: Transaction, mode: ProofMode) {
+  if (item.currency !== 'PEN' || item.kind === 'conversion') return 'No disponible en V1'
+  if (item.status !== 'Completado') return 'Disponible al completarse'
+  if (!item.id) return 'Sin referencia'
+  if (mode === 'api' && !item.channel.toUpperCase().includes('API')) return 'Sin confirmación backend'
+  return null
 }
 
 function operationLabel(kind: TransactionKind) {
@@ -158,13 +175,23 @@ function TransactionIcon({ kind }: { kind: TransactionKind }) {
 
 function TransactionRow({ item, mode, onOpen }: { item: Transaction; mode: ProofMode; onOpen: () => void }) {
   const sign = item.direction === 'in' ? '+' : item.direction === 'out' ? '−' : ''
+  const unavailableReason = receiptUnavailableReason(item, mode)
+  const receiptAvailable = !unavailableReason
+
   return (
-    <button className="transaction-row proof-row" onClick={onOpen} aria-label={`Abrir registro de actividad ${item.id}`}>
+    <button
+      className={`transaction-row proof-row ${receiptAvailable ? '' : 'receipt-unavailable'}`}
+      onClick={receiptAvailable ? onOpen : undefined}
+      disabled={!receiptAvailable}
+      aria-label={receiptAvailable ? `Abrir registro de actividad ${item.id}` : `Recibo no disponible para ${item.id}`}
+    >
       <TransactionIcon kind={item.kind} />
       <span className="transaction-main">
         <strong>{item.counterpart}</strong>
         <small>{item.title} · {shortDate(item.createdAt)}</small>
-        <span className={`proof-pill ${mode}`}>{proofLabel(mode)} · ref {item.id}</span>
+        <span className={`proof-pill ${mode} ${receiptAvailable ? '' : 'unavailable'}`}>
+          {receiptAvailable ? `${proofLabel(mode)} · ref ${item.id}` : unavailableReason}
+        </span>
       </span>
       <span className={`transaction-amount ${item.direction}`}><strong>{sign}{money(item.amount, item.currency)}</strong><small>{item.status}</small></span>
     </button>
@@ -176,7 +203,7 @@ function EmptyActivity() {
 }
 
 function ActivityProofSummary({ transactions, mode }: { transactions: Transaction[]; mode: ProofMode }) {
-  const completed = transactions.filter((item) => item.status === 'Completado').length
+  const receiptsAvailable = transactions.filter((item) => canOpenReceipt(item, mode)).length
   const lastReference = transactions[0]?.id ?? 'Sin referencia'
 
   return (
@@ -188,7 +215,7 @@ function ActivityProofSummary({ transactions, mode }: { transactions: Transactio
       </div>
       <div className="proof-metrics">
         <div><span>Movimientos visibles</span><strong>{transactions.length}</strong></div>
-        <div><span>Completados</span><strong>{completed}</strong></div>
+        <div><span>Recibos disponibles</span><strong>{receiptsAvailable}</strong></div>
         <div><span>Última referencia</span><strong>{lastReference}</strong></div>
       </div>
     </section>
@@ -370,6 +397,7 @@ function ReceiptModal({ item, mode, onClose }: { item: Transaction; mode: ProofM
           <div><span>Fecha y hora</span><strong>{fullDate(item.createdAt)}</strong></div>
           <div><span>Canal</span><strong>{item.channel}</strong></div>
           <div><span>Referencia</span><strong>{item.id}</strong></div>
+          {item.backendId && item.backendId !== item.id && <div><span>ID backend</span><strong>{item.backendId}</strong></div>}
           {item.note && <div><span>Nota</span><strong>{item.note}</strong></div>}
         </div>
         <div className="receipt-warning"><strong>Recibo interno ionPAY V1</strong><span>{mode === 'api' ? 'No es comprobante bancario ni release de producción.' : 'Demo local: no prueba movimiento financiero real.'}</span></div>
@@ -562,14 +590,22 @@ export default function App() {
 
   const proofMode: ProofMode = mode === 'demo' ? 'demo' : 'api'
 
+  const openConfirmedReceipt = (item: Transaction) => {
+    if (!canOpenReceipt(item, proofMode)) {
+      flash('Recibo disponible solo para actividad confirmada.', 'error')
+      return
+    }
+    setReceipt(item)
+  }
+
   return (
     <div className="app-shell">
       <Sidebar tab={tab} setTab={setTab} mode={proofMode} />
       <main className="app-content">
         {mode === 'demo' && <div className="demo-caption">Modo demo · fondos simulados · no mueve dinero real</div>}
         {mode === 'api' && <div className="api-caption"><ShieldIcon /> API local · actividad y registros dependen de backend</div>}
-        {tab === 'home' && <Home state={state} mode={proofMode} setAction={setAction} setTab={setTab} openReceipt={setReceipt} />}
-        {tab === 'activity' && <ActivityPage transactions={state.transactions} mode={proofMode} openReceipt={setReceipt} />}
+        {tab === 'home' && <Home state={state} mode={proofMode} setAction={setAction} setTab={setTab} openReceipt={openConfirmedReceipt} />}
+        {tab === 'activity' && <ActivityPage transactions={state.transactions} mode={proofMode} openReceipt={openConfirmedReceipt} />}
         {tab === 'services' && <ServicesPage state={state} paymentRequests={paymentRequests} openAction={(next) => setAction(next)} onPayRequest={payPaymentRequestFromServices} onCancelRequest={cancelPaymentRequestFromServices} processingRequestId={processingRequestId} requestOperationPending={Boolean(processingRequestId)} />}
         {tab === 'profile' && <ProfilePage user={state.user} onReset={reset} logoutLabel={mode === 'demo' ? 'Salir y borrar datos demo' : 'Cerrar sesión'} />}
       </main>

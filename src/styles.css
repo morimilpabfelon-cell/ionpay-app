@@ -130,6 +130,10 @@ svg { width: 22px; height: 22px; }
 .section-title > button svg { width: 15px; }
 .transaction-row { width: 100%; border: 0; border-top: 1px solid #edf1ee; background: transparent; display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 13px; align-items: center; text-align: left; padding: 15px 2px; }
 .transaction-row:hover { background: #fbfcfb; }
+.transaction-row.receipt-unavailable { opacity: .62; }
+.transaction-row.receipt-unavailable:hover { background: transparent; }
+.transaction-row.receipt-unavailable .transaction-main strong { color: #707a78; }
+.proof-pill.unavailable { color: #8f6f00; background: #fff7d6; }
 .transaction-icon { width: 39px; height: 39px; border-radius: 12px; display: grid; place-items: center; }
 .transaction-icon svg { width: 18px; }
 .transaction-icon.incoming { color: #14826a; background: #e4f7f1; }

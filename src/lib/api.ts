@@ -147,6 +147,7 @@ function mapActivity(items: ActivityItem[]): Transaction[] {
       const outgoing = direction === 'out'
       return {
         id: item.reference,
+        backendId: item.id,
         kind: outgoing ? 'payment' : 'receive',
         title: outgoing ? 'Pago realizado' : 'Cobro recibido',
         counterpart: `@${outgoing ? requesterAlias : payerAlias}`,
@@ -163,6 +164,7 @@ function mapActivity(items: ActivityItem[]): Transaction[] {
     if (item.type === 'DEMO_FUNDING') {
       return {
         id: item.reference,
+        backendId: item.id,
         kind: 'receive',
         title: 'Saldo demo recibido',
         counterpart: 'Fondeo de demostración',
@@ -178,6 +180,7 @@ function mapActivity(items: ActivityItem[]): Transaction[] {
 
     return {
       id: item.reference,
+      backendId: item.id,
       kind: direction === 'out' ? 'send' : 'receive',
       title: direction === 'out' ? 'Dinero enviado' : 'Dinero recibido',
       counterpart: `@${direction === 'out' ? recipientAlias : senderAlias}`,

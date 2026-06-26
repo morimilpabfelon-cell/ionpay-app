@@ -45,6 +45,7 @@ export interface Wallet {
 
 export interface Transaction {
   id: string
+  backendId?: string
   kind: TransactionKind
   title: string
   counterpart: string
