@@ -16,6 +16,14 @@ export function createLedger(db) {
   function postEntries({ type, reference, entries, metadata = {} }) {
     if (!Array.isArray(entries) || entries.length < 2) throw new LedgerError('Una operación requiere al menos dos asientos.')
 
+    // Validate currencies early
+    const validCurrencies = new Set(['PEN', 'USDT'])
+    for (const entry of entries) {
+      if (!validCurrencies.has(entry.currency)) {
+        throw new LedgerError(`Moneda ${entry.currency} no válida.`)
+      }
+    }
+
     const grouped = new Map()
     for (const entry of entries) {
       if (!Number.isSafeInteger(entry.amount) || entry.amount === 0) throw new LedgerError('Monto contable inválido.')
@@ -47,7 +55,14 @@ export function createLedger(db) {
       if (!Number.isSafeInteger(account.balance)) throw new LedgerError('Saldo contable fuera del rango seguro.')
       const nextBalance = account.balance + entry.amount
       if (!Number.isSafeInteger(nextBalance)) throw new LedgerError('El saldo contable excede el rango seguro.')
+      
+      // CRITICAL FIX: Validate SYSTEM account balance
+      // Prevents treasury accounts from going negative
+      if (account.owner_type === 'SYSTEM' && nextBalance < 0) {
+        throw new LedgerError(`Tesorería ${entry.currency} insuficiente.`, 'TREASURY_INSUFFICIENT')
+      }
       if (account.owner_type === 'USER' && nextBalance < 0) throw new LedgerError('Saldo insuficiente.', 'INSUFFICIENT_FUNDS')
+      
       return { entry, account, nextBalance }
     })
 
