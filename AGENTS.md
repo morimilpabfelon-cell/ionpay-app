@@ -17,6 +17,34 @@ Android e iOS como plataformas objetivo.
 Nueva demo solo después de core operativo y probado.
 ```
 
+## Estándar obligatorio de agentes
+
+Todo agente debe operar con:
+
+```text
+Prompt + Loop + Output Contract + Stop Conditions
+```
+
+No se acepta un agente que opere solo con prompt de rol.
+
+Cada agente debe tener:
+
+```text
+1. Role Prompt.
+2. Operating Loop.
+3. Evidence Checklist.
+4. Output Contract.
+5. Stop Conditions.
+```
+
+Fuente durable de esta doctrina:
+
+```text
+ionpay-ops-memory/AGENT_OPERATING_STANDARD.md
+```
+
+Antes de ejecutar, todo agente debe consultar este archivo en la memoria externa cuando la tarea toque auditoría, gates, pagos, seguridad, mobile, testing o core.
+
 ## Reglas institucionales
 
 - Ningún agente trabaja desde cero ni inventa dirección.
@@ -28,8 +56,10 @@ Nueva demo solo después de core operativo y probado.
 - Scope Guardian bloquea scope creep y define archivos permitidos/bloqueados.
 - Software Engineer implementa solo issues autorizados; no autoriza merge por sí solo.
 - Financial Safety Reviewer revisa wallet, saldo, transferencias, ledger, idempotency, receipts, payment states, settlement, reconciliation, refunds, reversals y disputes.
+- Security / API Reviewer revisa autenticación, autorización, sesiones, validación, abuso de flujos, demo/producción, logging/audit y riesgos OWASP.
 - Frontend Surface Reviewer revisa UI, errores, claridad, mobile usability y riesgo de falso éxito.
 - Mobile Platform Reviewer es obligatorio antes de cambios Android/iOS, Capacitor, permisos, deep links, biometría, cámara, notificaciones, distribución o build mobile.
+- Testing / QA Reviewer revisa cobertura, matriz de pruebas, CI, regresiones y validación manual.
 - Founder approval es obligatorio antes de merge final, cierre de fase, RC sign-off, activación real o release.
 
 ## Estado operativo actual
@@ -47,15 +77,36 @@ PAYMENT CORE ARCHITECTURE / REAL SOFTWARE CORE FIRST
 Active implementation item:
 
 ```text
-Issue #32 — ionPAY Ecosystem Payment Core Blueprint
+Issue #33 — Codebase Zero Audit & Payment Core Baseline
 state: open
-classification: Architecture / sandbox-only planning
-implementation status: blueprint and routing only
+classification: Audit / architecture / payment-core baseline
+implementation status: audit and routing only
 ```
 
-Issue #30 / PR #31 quedan pausados operativamente mientras Issue #32 define el core.
+Issue #32 permanece abierto como blueprint de ecosistema. Issue #33 es la auditoría práctica antes de nuevas capas.
+
+Issue #30 / PR #31 quedan pausados operativamente mientras Issue #33 define baseline.
 
 No hay producción pública. No hay dinero real. No hay release público autorizado.
+
+## Issue #33 review queue
+
+```text
+Product Architect: completed / persisted
+Software Architect: completed / persisted
+Financial Safety Reviewer: completed / persisted
+Security / API Reviewer: completed / persisted
+Mobile Platform Reviewer: completed / persisted
+Testing / QA Reviewer: pending
+Scope Guardian: pending
+Founder decision: pending
+```
+
+Siguiente agente:
+
+```text
+Testing / QA Reviewer
+```
 
 ## Plataformas objetivo
 
@@ -85,7 +136,7 @@ Reglas de plataforma:
 
 ## Core requerido
 
-Issue #32 debe cubrir, aunque algunos módulos queden deshabilitados:
+Issue #33 debe auditar y Issue #34+ solo podrá implementar por gates separados estos módulos:
 
 ```text
 Wallet Core
@@ -124,7 +175,7 @@ iOS Platform Adapter boundary
 
 ## Testing doctrine obligatorio
 
-Todo issue derivado de Issue #32 debe incluir pruebas para:
+Todo issue derivado de Issue #33 debe incluir pruebas para:
 
 ```text
 happy-path send/receive
@@ -160,10 +211,12 @@ iOS readiness when iOS work is opened
 4. Technical gate.
 5. Financial Safety gate para wallet, saldo, pagos, ledger, idempotency, receipts, settlement, reconciliation, refunds, reversals o disputes.
 6. Compliance/security gate para KYC/KYB, AML, sanctions, provider readiness, PCI, banking, cards, payouts, crypto o producción.
-7. Frontend Surface gate para UI/copy/mobile/falso éxito.
-8. Mobile Platform gate para Android, iOS, Capacitor, permisos, deep links, cámara, biometría, notificaciones, stores o native code.
-9. Founder approval gate.
-10. RC/demo readiness gate antes de cualquier nueva demo del core.
+7. Security / API gate para auth, authorization, API abuse, rate limits, logging, demo/prod boundary y OWASP API risks.
+8. Frontend Surface gate para UI/copy/mobile/falso éxito.
+9. Mobile Platform gate para Android, iOS, Capacitor, permisos, deep links, cámara, biometría, notificaciones, stores o native code.
+10. Testing / QA gate para cobertura, CI, regresiones, matriz financiera/API/mobile y validación manual.
+11. Founder approval gate.
+12. RC/demo readiness gate antes de cualquier nueva demo del core.
 
 ## Comandos mínimos
 
@@ -187,6 +240,7 @@ Cuando iOS se abra formalmente con issue/gate separado, se definirán comandos e
 
 Detener trabajo y reportar si aparece cualquiera de estos casos:
 
+- agente sin Prompt + Loop + Output Contract + Stop Conditions;
 - cambios en backend, ledger, DB, auth, package, lockfile, Android native o iOS native sin gate;
 - receipt para estado pending/failed/missing confirmation;
 - falso éxito;
