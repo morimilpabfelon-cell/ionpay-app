@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 import { createIonPayServer } from '../app.mjs'
 
@@ -29,9 +28,7 @@ async function startApi({ dbPath = ':memory:', demoMode = true, now } = {}) {
 }
 
 test('Issue #34: API client rejects 2xx body.error and keeps receipt proof gated', () => {
-  const currentFile = fileURLToPath(import.meta.url)
-  const repoRoot = join(currentFile, '..', '..', '..')
-  const apiSource = readFileSync(join(repoRoot, 'src', 'lib', 'api.ts'), 'utf8')
+  const apiSource = readFileSync(new URL('../../src/lib/api.ts', import.meta.url), 'utf8')
 
   assert.match(apiSource, /if \(body\.error\) \{/)
   assert.match(apiSource, /throw new IonPayApiError\(\s*response\.status,/)
