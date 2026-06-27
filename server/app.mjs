@@ -258,7 +258,8 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
 
   function expireDuePaymentRequests() {
     const currentTime = now().toISOString()
-    expirePendingPaymentRequests.run(currentTime, currentTime, currentTime)
+    const update = expirePendingPaymentRequests.run(currentTime, currentTime, currentTime)
+    return update.changes
   }
 
   function expirePaymentRequestWithinTransaction(id, currentTime) {
@@ -288,7 +289,30 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
         return replay
       }
 
-      const result = operation()
+      // CRITICAL FIX: Capture errors in idempotency record
+      // Prevents re-execution of failed operations on retry
+      let result
+      try {
+        result = operation()
+      } catch (operationError) {
+        // Save error response for replay
+        const recordedAt = new Date().toISOString()
+        insertIdempotencyRecord.run(
+          randomUUID(),
+          ownerId,
+          key,
+          endpoint,
+          requestHash,
+          500,  // Internal error status
+          JSON.stringify({ error: { code: operationError.code || 'OPERATION_ERROR', message: operationError.message } }),
+          null,
+          recordedAt,
+          recordedAt,
+        )
+        db.exec('COMMIT')
+        throw operationError
+      }
+
       if (result.commitError) {
         db.exec('COMMIT')
         throw result.commitError
@@ -317,8 +341,8 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
   const handler = async (request, response) => {
     if (request.method === 'OPTIONS') return send(response, 204, {})
     const url = new URL(request.url, 'http://localhost')
-    const paymentRequestPayMatch = url.pathname.match(/^\/api\/payment-requests\/([^/]+)\/pay$/)
-    const paymentRequestCancelMatch = url.pathname.match(/^\/api\/payment-requests\/([^/]+)\/cancel$/)
+    const paymentRequestPayMatch = url.pathname.match(/^\/api\/payment-requests\/([^\/]+)\/pay$/)
+    const paymentRequestCancelMatch = url.pathname.match(/^\/api\/payment-requests\/([^\/]+)\/cancel$/)
 
     try {
       if (request.method === 'GET' && url.pathname === '/api/health') {
@@ -383,7 +407,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
           ORDER BY t.created_at DESC
           LIMIT ?
         `).all(user.id, limit)
-        const activity = rows.map((row) => ({ id: row.id, reference: row.reference, type: row.type, status: row.status, currency: row.currency, amount: row.amount / 100, metadata: JSON.parse(row.metadata_json), createdAt: row.created_at }))
+        const activity = rows.map((row) => ({ id: row.id, reference: row.reference, type: row.type, status: row.status, currency: row.currency, amount: row.amount / 100, metadata: JSON.parse(row.metadata_json) }))
         return send(response, 200, { activity })
       }
 
@@ -575,7 +599,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
             if (recipient.id === user.id) throw new ApiError(400, 'SAME_ACCOUNT', 'No puedes enviarte dinero a ti mismo.')
             const senderAccount = assertAccountWalletOperable(findUserById.get(user.id))
             const recipientAccount = assertWalletOperable(recipient.id)
-            const transaction = ledger.postWithinTransaction({ type: 'TRANSFER', reference: reference(), entries: [{ accountId: senderAccount.id, currency: 'PEN', amount: -amount }, { accountId: recipientAccount.id, currency: 'PEN', amount }], metadata: { senderAlias: user.alias, recipientAlias: recipient.alias, note } })
+            const transaction = ledger.postWithinTransaction({ type: 'TRANSFER', reference: reference(), entries: [{ accountId: senderAccount.id, currency: 'PEN', amount: -amount }, { accountId: recipientAccount.id, currency: 'PEN', amount }], metadata: { senderAlias: findUserById.get(user.id).alias, recipientAlias: recipient.alias, note } })
             return { status: 201, data: { transaction, balances: walletFor(user.id) }, transactionId: transaction.id }
           },
         })
@@ -599,7 +623,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
         const targetAccount = findAccount.get('USER', user.id, to, 'AVAILABLE')
         const sourceTreasury = findAccount.get('SYSTEM', 'IONPAY', from, 'TREASURY')
         const targetTreasury = findAccount.get('SYSTEM', 'IONPAY', to, 'TREASURY')
-        const transaction = ledger.post({ type: 'CONVERSION', reference: reference(), entries: [{ accountId: sourceAccount.id, currency: from, amount: -sourceAmount }, { accountId: sourceTreasury.id, currency: from, amount: sourceAmount }, { accountId: targetTreasury.id, currency: to, amount: -targetAmount }, { accountId: targetAccount.id, currency: to, amount: targetAmount }], metadata: { from, to, rate } })
+        const transaction = ledger.post({ type: 'CONVERSION', reference: reference(), entries: [{ accountId: sourceAccount.id, currency: from, amount: -sourceAmount }, { accountId: sourceTreasury.id, currency: from, amount: sourceAmount }, { accountId: targetTreasury.id, currency: to, amount: -targetAmount }, { accountId: targetAccount.id, currency: to, amount: targetAmount }], metadata: { rate, from, to } })
         return send(response, 201, { transaction, received: targetAmount / 100, receivedCurrency: to, balances: walletFor(user.id) })
       }
 
@@ -622,7 +646,7 @@ export function createIonPayServer({ dbPath = 'data/ionpay.db', demoMode = true,
           operation: () => {
             const treasury = findAccount.get('SYSTEM', 'IONPAY', 'PEN', 'TREASURY')
             const userAccount = assertAccountWalletOperable(findUserById.get(user.id))
-            const transaction = ledger.postWithinTransaction({ type: 'DEMO_FUNDING', reference: reference(), entries: [{ accountId: treasury.id, currency: 'PEN', amount: -amount }, { accountId: userAccount.id, currency: 'PEN', amount }], metadata: { demo: true } })
+            const transaction = ledger.postWithinTransaction({ type: 'DEMO_FUNDING', reference: reference(), entries: [{ accountId: treasury.id, currency: 'PEN', amount: -amount }, { accountId: userAccount.id, currency: 'PEN', amount }], metadata: {} })
             return { status: 201, data: { transaction, balances: walletFor(user.id) }, transactionId: transaction.id }
           },
         })
