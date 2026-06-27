@@ -1,192 +1,136 @@
 # IONPAY
 
-IONPAY es una billetera financiera Android-first construida de forma incremental. El objetivo no es desarrollar todos los módulos al mismo tiempo, sino consolidar primero el núcleo seguro de cuenta, wallet, ledger, transferencias, cobros y trazabilidad; después integrar la interfaz; luego validar Android; y solo más adelante evaluar producción bajo autorización separada.
+IONPAY es una billetera financiera y plataforma de pagos del ecosistema Ion. El producto debe funcionar en **Android e iOS**.
 
-La fuente operativa para agentes dentro del repositorio es [`AGENTS.md`](./AGENTS.md). Este README resume el estado del proyecto para revisión rápida y onboarding técnico.
+La prioridad vigente ya no es seguir puliendo una demo visual. La demo visual actual es suficiente por ahora. La prioridad es construir el **software core real**: wallet, ledger, payment core, sandbox provider, gates de riesgo, settlement, reconciliation, receipts, auditoría, observabilidad y pruebas.
 
-## Principio de desarrollo
+Las funciones de dinero real permanecen deshabilitadas hasta aprobación explícita del fundador y gates técnicos, financieros, regulatorios y de compliance.
 
-IONPAY se desarrolla por fases pequeñas, verificables y revisables.
+## Fuente operativa
 
-Regla central:
-
-- una fase o gap activo;
-- una frontera de alcance;
-- una PR pequeña cuando aplique;
-- una validación clara;
-- reviewer obligatorio cuando hay riesgo financiero;
-- ningún merge final, cierre de fase, release candidate sign-off o release sin autorización humana explícita.
+La fuente operativa para agentes dentro del repositorio es [`AGENTS.md`](./AGENTS.md). Este README resume el estado para revisión rápida y onboarding técnico.
 
 ## Estado operativo actual
 
-### Estado de control
+```text
+V1 RC FREEZE / INTERNAL RC SIGN-OFF PASSED
+```
 
-Estado actual: **V1 RC FREEZE**.
+Prioridad estratégica:
 
-Active implementation item: **none**.
+```text
+PAYMENT CORE ARCHITECTURE / REAL SOFTWARE CORE FIRST
+```
 
-No hay producción pública.
+Active implementation item:
 
-No hay dinero real.
+```text
+Issue #32 — ionPAY Ecosystem Payment Core Blueprint
+state: open
+classification: Architecture / sandbox-only planning
+implementation status: blueprint and routing only
+```
 
-No hay release público autorizado.
+Issue #30 / PR #31 quedan pausados operativamente mientras Issue #32 define el core.
 
-Issue #26 está **closed / completed** con decisión final: **A — ENTER V1 RC FREEZE**.
+No hay producción pública. No hay dinero real. No hay release público autorizado.
 
-Este estado congela alcance y gates. No autoriza implementación, producción, dinero real ni release público.
+## Plataformas objetivo
 
-### Última decisión de control
+IONPAY debe diseñarse para:
 
-- **Issue #26 — P0 V1 Release Candidate Freeze Plan**.
-- Estado: **closed / completed**.
-- Decisión final: **A — ENTER V1 RC FREEZE**.
-- Tipo: planning / readiness / gates.
-- Implementación: ninguna.
-- Código autorizado: no.
-- Feature autorizada: no.
-- Producción autorizada: no.
-- Dinero real autorizado: no.
-- Release público autorizado: no.
+```text
+Android
+iOS
+```
 
-Gates humanos registrados:
+Estrategia actual:
 
-- Product Architect: **ENTER V1 RC FREEZE**.
-- Scope Guardian: **APPROVED FOR RC FREEZE SCOPE**.
-- Financial Safety Reviewer: **APPROVED FOR RC FREEZE FINANCIAL SAFETY**.
-- Frontend Surface Reviewer: **APPROVED FOR RC FREEZE FRONTEND SURFACE**.
-- Founder: **APPROVED FOR RC FREEZE**.
+```text
+Frontend: React + TypeScript + Vite
+Mobile container: Capacitor
+Android: proyecto nativo actual en android/
+iOS: plataforma objetivo futura; no se activa trabajo nativo iOS sin issue/gate separado
+Backend local: Node.js
+Database: SQLite
+Ledger: doble entrada con montos enteros
+```
 
-### Clasificación Demo / Error / Loading / Empty states
+Reglas de plataforma:
 
-P1 antes de cualquier RC sign-off final si afecta:
+- El payment core debe ser independiente de Android/iOS.
+- La lógica financiera vive en backend/core, no en código nativo mobile.
+- Las diferencias de Android/iOS deben aislarse con platform adapters.
+- Cualquier cambio nativo Android/iOS, Capacitor, permisos, deep links, biometría, cámara, notificaciones o distribución requiere issue separado, Mobile Platform Reviewer y Founder approval.
 
-- confianza;
-- pago;
-- saldo;
-- receipt;
-- distinción demo/API;
-- falso éxito;
-- ambigüedad de loading;
-- ambigüedad de error;
-- claridad operativa.
+## Core requerido
 
-P2 después de RC solo si es polish cosmético y no afecta interpretación transaccional, proof de receipt/activity, claridad de pago/saldo, claridad demo/API ni scope V1.
+El diseño de Issue #32 debe cubrir:
 
-### Reconciliaciones cerradas
+```text
+Wallet Core
+Ledger Core
+PaymentIntent / Payment Core
+PaymentRail Interface
+ProviderAdapter Interface
+Sandbox Provider
+Internal P2P Payments
+Payment Requests / Cobros
+Merchant Core boundary
+QR Payments future boundary
+Checkout/Gateway future boundary
+Payouts future boundary
+Cards future boundary
+Bank Transfers future boundary
+Crypto/Public USDT future boundary
+KYC/KYB Gate Model
+AML/Sanctions Gate Model
+Risk/Fraud Gate Model
+Limits Engine
+Idempotency Engine
+Webhook/Event Inbox
+Settlement Engine
+Reconciliation Engine
+Refund/Reversal/Dispute Model
+Receipt/Proof Model
+Feature Flags / Module Enablement
+Audit Logs
+Observability
+Testing Matrix
+Operational Readiness Gates
+Android Platform Adapter boundary
+iOS Platform Adapter boundary
+```
 
-- Issue #10: **closed / completed**. Cierre administrativo con PR #11 como evidencia principal de Phase 1.3B — V1 Product Surface Lock.
-- Issue #20: **closed / completed**. Receipt Proof Hardening implementado por PR #24.
-- Issue #26: **closed / completed**. V1 RC Freeze Plan completado.
-- PR #22: closed / not merged. No usar como evidencia de implementación.
-- PR #23: closed / not merged. Superseded por PR #24. No usar como evidencia de implementación.
-- PR #24: closed / merged. Fuente de verdad para Issue #20.
-- PR #25: closed / merged. Fuente de verdad para automation gates.
+## Testing requerido
 
-### Última mejora de producto cerrada
+Antes de una nueva demo del core, el software debe demostrar:
 
-- **Issue #20 — Receipt Proof Hardening: explicit confirmed-activity gate**.
-- Estado: **closed / completed**.
-- Implementación: PR #24.
-- Branch: `issue-20-proof-gate`.
-- Reviewed head SHA: `115cd2a45dab98a937008d0d7f1dc4952b09a1c3`.
-- Squash merge SHA: `01d0a5aa9cf41b34b177bded26f93209080f0fc2`.
-- Archivos modificados:
-  - `src/App.tsx`;
-  - `src/lib/api.ts`;
-  - `src/types.ts`;
-  - `src/styles.css`.
-
-Resultado implementado:
-
-- receipt opening queda detrás de actividad PEN completada;
-- API-mode receipts requieren metadata de prueba API/backend;
-- pending, failed, missing-confirmation, unavailable, non-PEN y local-only API states no pueden abrir comprobantes;
-- demo receipts quedan claramente simulados;
-- UI de comprobante no disponible queda visible y no clickable.
-
-### Automatización operativa instalada
-
-- PR: **#25 — Add operational automation gates**.
-- Estado: **closed / merged**.
-- Merge SHA: `fba68e68436ede6030c4228e70e9c6989aa6b398`.
-- Archivos instalados:
-  - `.github/workflows/validate.yml`;
-  - `.github/pull_request_template.md`;
-  - `scripts/pre-pr-check.ps1`.
-
-La automatización refuerza gates. No aprueba seguridad financiera, ledger, producción, dinero real, release público ni scope de producto.
-
-## Fases completadas / documentadas
-
-- Phase 0.1 — Agent Operating System.
-- Phase 1.1A — Onboarding structure.
-- Phase 1.1B — V1 Scope Lock UI.
-- Phase 1.2A — Financial Core Hardening.
-- Phase 1.2B — Backend V1 Surface Lock.
-- Phase 1.2C — Idempotency & Retry Safety.
-- Phase 1.3A — Payment Requests Foundation.
-- Phase 1.3B — V1 Product Surface Lock, implemented by PR #11 and administratively closed through Issue #10.
-- Phase 1.4 — Account, Wallet & Single Fiat Balance.
-- Phase 1.5 — Frontend API Integration for Transfers and Payment Requests.
-- Phase 1.8 / 1.8B — Payment Requests UX + Activity/Receipt Continuity Hardening, documented in `docs/phase-1-8-validation.md`.
-- Issue #20 — Receipt Proof Hardening, completed by PR #24.
-- Issue #26 — V1 Release Candidate Freeze Plan, completed as V1 RC Freeze.
-- Operational automation gates, installed by PR #25.
-
-## Próximo trabajo correcto
-
-No hay active implementation item.
-
-En V1 RC Freeze, cualquier trabajo posterior requiere issue separado, clasificación, gates requeridos y Founder approval explícito.
-
-Posibles trabajos futuros no autorizados por este README:
-
-- P1 hardening si aparece un riesgo sobre pago, saldo, receipt, demo/API, falso éxito, loading/error ambiguo o claridad operativa.
-- P2 polish si es cosmético y no afecta interpretación transaccional.
-- RC sign-off final con evidencia técnica y validación mobile 390x844.
-
-## Alcance V1
-
-IN V1:
-
-- registro/login;
-- cuenta y estado de usuario;
-- wallet PEN;
-- transferencias internas;
-- cobros / payment requests;
-- historial / activity;
-- comprobantes;
-- QR básico como display;
-- modo comercio básico cuando el core esté estable.
-
-Fuera de V1 salvo aprobación explícita:
-
-- USDT público;
-- conversions;
-- IonExchange Link;
-- Ion Card;
-- Ion Disposable Card;
-- Ion Touch / NFC;
-- QR camera scanning;
-- Ion Checkout avanzado;
-- Ion Gateway;
-- Ion Payouts;
-- cashback;
-- referidos;
-- préstamos;
-- multi-currency public surface;
-- producción pública;
-- dinero real;
-- release público.
-
-## Arquitectura actual
-
-- Frontend: React, TypeScript y Vite.
-- Android: Capacitor, proyecto nativo dentro de `android/`.
-- Backend local: Node.js dentro de `server/`.
-- Base de datos: SQLite integrado.
-- Contabilidad: ledger de doble entrada con montos almacenados como enteros.
-- Backend como fuente de verdad para wallet, saldo, activity, transfers y payment requests.
+```text
+send/receive correcto
+saldo insuficiente bloqueado
+destinatario inválido bloqueado
+idempotency contra duplicados
+protección contra doble gasto
+provider timeout simulado
+provider failure simulado
+webhook duplicado simulado
+webhook fuera de orden simulado
+ledger balanceado
+no negative user balance
+refund/reversal/dispute simulado
+settlement correcto
+reconciliation match
+reconciliation mismatch detectado
+risk/limits denial
+KYC/KYB blocked state
+feature flag disabled state
+receipt solo con estado confirmado
+no real money movement
+no production claim
+Android build/sync safety
+iOS readiness cuando iOS se abra formalmente
+```
 
 ## Ejecutar el proyecto
 
@@ -214,60 +158,46 @@ API local esperada:
 http://127.0.0.1:8787
 ```
 
-## Validación requerida para cambios futuros
-
-Pre-PR local:
+## Validación requerida
 
 ```powershell
 ./scripts/pre-pr-check.ps1
 ```
 
-Build web:
-
 ```bash
 pnpm build
-```
-
-Tests backend:
-
-```bash
 pnpm api:test
-```
-
-Sincronizar Android:
-
-```bash
 pnpm android:sync
-```
-
-Diff check:
-
-```bash
 git diff --check
 ```
 
+Cuando iOS se abra formalmente, se definirá validación iOS equivalente antes de cualquier cambio nativo.
+
 ## Hard boundary
 
-Bloqueado salvo gate separado:
+Bloqueado salvo issue separado, gate fresco y Founder approval:
 
-- producción;
-- dinero real;
-- release público;
-- backend;
-- ledger;
-- DB/schema/migrations;
-- auth financiero;
-- money parser;
-- idempotency;
-- `package.json`;
-- `pnpm-lock.yaml`;
-- Android native;
-- iOS;
-- QR scanner;
-- camera;
-- public USDT;
-- conversions;
-- cards;
-- IonExchange;
-- checkout/gateway/payouts;
-- new feature scope sin issue/gate fresco.
+```text
+production
+real money
+public release
+banking/regulatory approval
+real bank transfers
+real card issuing/acquiring
+real checkout/gateway
+real payouts
+real QR payments
+real crypto/USDT public surface
+external provider activation
+KYC/KYB vendor integration
+AML live screening
+ledger mutation
+DB/schema changes
+backend implementation beyond approved issue
+frontend implementation beyond approved issue
+package/lockfile changes
+native Android/iOS changes
+Apple Pay / Google Pay activation
+app store distribution
+new feature scope
+```
