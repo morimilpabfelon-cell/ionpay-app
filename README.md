@@ -10,6 +10,26 @@ Las funciones de dinero real permanecen deshabilitadas hasta aprobación explíc
 
 La fuente operativa para agentes dentro del repositorio es [`AGENTS.md`](./AGENTS.md). Este README resume el estado para revisión rápida y onboarding técnico.
 
+La memoria externa obligatoria es:
+
+```text
+morimilpabfelon-cell/ionpay-ops-memory
+```
+
+Doctrina operativa obligatoria para agentes:
+
+```text
+ionpay-ops-memory/AGENT_OPERATING_STANDARD.md
+```
+
+Todo agente debe operar con:
+
+```text
+Prompt + Loop + Output Contract + Stop Conditions
+```
+
+No se acepta un agente que opere solo con prompt de rol.
+
 ## Estado operativo actual
 
 ```text
@@ -25,15 +45,30 @@ PAYMENT CORE ARCHITECTURE / REAL SOFTWARE CORE FIRST
 Active implementation item:
 
 ```text
-Issue #32 — ionPAY Ecosystem Payment Core Blueprint
+Issue #33 — Codebase Zero Audit & Payment Core Baseline
 state: open
-classification: Architecture / sandbox-only planning
-implementation status: blueprint and routing only
+classification: Audit / architecture / payment-core baseline
+implementation status: audit and routing only
 ```
 
-Issue #30 / PR #31 quedan pausados operativamente mientras Issue #32 define el core.
+Issue #32 permanece abierto como blueprint de ecosistema. Issue #33 es la auditoría práctica antes de nuevas capas.
+
+Issue #30 / PR #31 quedan pausados operativamente mientras Issue #33 define el baseline.
 
 No hay producción pública. No hay dinero real. No hay release público autorizado.
+
+## Issue #33 review queue
+
+```text
+Product Architect: completed / persisted
+Software Architect: completed / persisted
+Financial Safety Reviewer: completed / persisted
+Security / API Reviewer: completed / persisted
+Mobile Platform Reviewer: completed / persisted
+Testing / QA Reviewer: pending
+Scope Guardian: pending
+Founder decision: pending
+```
 
 ## Plataformas objetivo
 
@@ -65,7 +100,7 @@ Reglas de plataforma:
 
 ## Core requerido
 
-El diseño de Issue #32 debe cubrir:
+Issue #33 audita y futuros issues solo podrán implementar por gates separados:
 
 ```text
 Wallet Core
