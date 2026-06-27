@@ -83,7 +83,7 @@ function Onboarding({
           </div>
         </div>
         <div className="issue30-balance-preview" aria-hidden="true">
-          <span>Saldo disponible</span>
+          <span>Vista previa de saldo</span>
           <strong>S/ 0.00</strong>
           <small>Demo/API local · no producción</small>
         </div>
