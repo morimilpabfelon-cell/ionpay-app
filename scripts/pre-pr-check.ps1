@@ -60,7 +60,7 @@ if ($changed.Count -eq 0) {
 }
 
 $restrictedPatterns = @(
-  "^server/",
+  "^server/(?!tests/[^/]+\.test\.mjs$)",
   "^android/",
   "^ios/",
   "^package\.json$",
