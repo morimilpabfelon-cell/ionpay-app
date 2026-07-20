@@ -28,11 +28,9 @@ button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .45; }
 svg { width: 22px; height: 22px; }
 
-.brand { display: inline-flex; align-items: baseline; gap: 5px; position: relative; z-index: 3; color: currentColor; line-height: 1; }
-.brand-ion { font: 300 27px/1 'Manrope', system-ui, sans-serif; letter-spacing: -2.4px; }
-.brand-pay { font: 900 28px/1 'Manrope', system-ui, sans-serif; letter-spacing: -2.7px; }
-.brand-mini { font: 300 16px/1 'Manrope', system-ui, sans-serif; letter-spacing: -1px; }
-.brand-mini span { font-weight: 900; margin-left: 2px; }
+.brand { display: inline-flex; align-items: center; position: relative; z-index: 3; color: currentColor; line-height: 1; }
+.brand-pay { display: inline-block; font: 900 30px/1 'Manrope', system-ui, sans-serif; letter-spacing: -2.8px; text-transform: uppercase; }
+.brand.compact .brand-pay { font-size: 16px; letter-spacing: -1.35px; }
 
 .eyebrow { color: var(--lime-dark); font-size: 11px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
 .eyebrow.light { color: var(--lime); }

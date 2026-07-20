@@ -96,7 +96,7 @@ export default function ServicesPage({ state, paymentRequests, openAction, onPay
 
       <header className="requests-mobile-header">
         <div>
-          <span className="eyebrow">ionPAY V1 · PEN only</span>
+          <span className="eyebrow">Yorm V1 · PEN only</span>
           <h1>Cobros</h1>
           <p>Requests ordenan cobros. Activity confirma operaciones y receipts.</p>
         </div>
