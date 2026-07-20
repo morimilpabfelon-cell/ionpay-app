@@ -138,8 +138,8 @@ function directionLabel(direction: Transaction['direction']) {
 
 function Logo({ compact = false }: { compact?: boolean }) {
   return (
-    <div className={`brand ${compact ? 'compact' : ''}`} aria-label="PAY, aplicación Yorm">
-      {compact ? <span className="brand-mini">PAY</span> : <span className="brand-pay">PAY</span>}
+    <div className={`brand ${compact ? 'compact' : ''}`} aria-label="Yorm">
+      <span className="brand-yorm">{compact ? 'Y' : 'Yorm'}</span>
     </div>
   )
 }
@@ -327,7 +327,7 @@ function ActionModal({ action, state, demoMode, paymentRequests, processing, pro
     try {
       if (demoMode) {
         const kind = action === 'pay' ? 'payment' : 'send'
-        onDemoTransaction({ id: makeId(), kind, title: action === 'pay' ? 'Pago demo registrado' : 'Envío demo registrado', counterpart: name.trim(), amount: Number(amount), currency: 'PEN', direction: 'out', status: 'Completado', channel: action === 'pay' ? 'Ion Pay Demo' : 'IONPAY Demo', createdAt: new Date().toISOString(), note: note.trim() || undefined }, -Number(amount))
+        onDemoTransaction({ id: makeId(), kind, title: action === 'pay' ? 'Pago demo registrado' : 'Envío demo registrado', counterpart: name.trim(), amount: Number(amount), currency: 'PEN', direction: 'out', status: 'Completado', channel: 'Yorm Demo', createdAt: new Date().toISOString(), note: note.trim() || undefined }, -Number(amount))
         return
       }
 
