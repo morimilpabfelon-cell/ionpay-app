@@ -1,0 +1,61 @@
+name: Apply Yorm-only visible cleanup
+
+on:
+  push:
+    branches:
+      - issue-42-gate-a-yorm-only
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: issue-42-gate-a-yorm-only
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10 --activate
+
+      - name: Apply cleanup
+        run: node scripts/yorm-brand-cleanup.mjs
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: API tests
+        run: pnpm api:test
+
+      - name: Android sync
+        run: pnpm android:sync
+
+      - name: Validate generated state
+        run: |
+          git diff --check
+          git status --short
+
+      - name: Commit validated cleanup
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm scripts/yorm-brand-cleanup.mjs .github/workflows/yorm-brand-cleanup.yml
+          git add -A
+          git commit -m "feat: make Yorm the only visible brand"
+          git push origin HEAD:issue-42-gate-a-yorm-only
