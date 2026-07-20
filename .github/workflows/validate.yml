@@ -37,7 +37,14 @@ jobs:
 
       - name: Scope guard
         shell: pwsh
-        run: ./scripts/pre-pr-check.ps1 -SkipInstall -SkipValidation
+        env:
+          RESTRICTED_SCOPE_APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'scope-approved') }}
+        run: |
+          if ($env:RESTRICTED_SCOPE_APPROVED -eq 'true') {
+            ./scripts/pre-pr-check.ps1 -SkipInstall -SkipValidation -AllowRestricted
+          } else {
+            ./scripts/pre-pr-check.ps1 -SkipInstall -SkipValidation
+          }
 
       - name: Build
         run: pnpm build
