@@ -16,36 +16,54 @@ function write(relativePath, content) {
   fs.writeFileSync(filePath(relativePath), content.endsWith('\n') ? content : `${content}\n`, 'utf8')
 }
 
-function replaceRequired(relativePath, from, to) {
+function replaceIfPresent(relativePath, from, to) {
   const current = read(relativePath)
-  if (!current.includes(from)) {
-    throw new Error(`Required text was not found in ${relativePath}: ${from}`)
+  if (current.includes(from)) {
+    write(relativePath, current.replaceAll(from, to))
+    return true
   }
-  write(relativePath, current.replaceAll(from, to))
+  return false
 }
 
-function replaceRegexRequired(relativePath, expression, replacement) {
+function replaceRegexIfPresent(relativePath, expression, replacement) {
   const current = read(relativePath)
-  if (!expression.test(current)) {
-    throw new Error(`Required pattern was not found in ${relativePath}: ${expression}`)
+  if (expression.test(current)) {
+    write(relativePath, current.replace(expression, replacement))
+    return true
   }
-  write(relativePath, current.replace(expression, replacement))
+  return false
 }
 
 const oldLogo = `{compact ? <span className="brand-mini">PAY</span> : <span className="brand-pay">PAY</span>}`
 const newLogo = `<span className="brand-yorm">{compact ? 'Y' : 'Yorm'}</span>`
 
 for (const relativePath of ['src/App.tsx', 'src/components/Onboarding.tsx']) {
-  replaceRequired(relativePath, 'aria-label="PAY, aplicación Yorm"', 'aria-label="Yorm"')
-  replaceRequired(relativePath, oldLogo, newLogo)
+  replaceIfPresent(relativePath, 'aria-label="PAY, aplicación Yorm"', 'aria-label="Yorm"')
+  replaceIfPresent(relativePath, oldLogo, newLogo)
 }
 
-replaceRequired('src/App.tsx', "action === 'pay' ? 'Ion Pay Demo' : 'IONPAY Demo'", "'Yorm Demo'")
+replaceIfPresent('src/App.tsx', "action === 'pay' ? 'Ion Pay Demo' : 'IONPAY Demo'", "'Yorm Demo'")
 
-replaceRegexRequired(
+replaceRegexIfPresent(
   'src/styles.css',
   /\.brand-ion \{[^\n]*\}\r?\n\.brand-pay \{[^\n]*\}\r?\n\.brand-mini \{[^\n]*\}\r?\n\.brand-mini span \{[^\n]*\}\r?\n/,
   `.brand-yorm { font: 800 28px/1 'Manrope', system-ui, sans-serif; letter-spacing: -1.8px; }\n.brand.compact .brand-yorm { font-size: 16px; letter-spacing: -.8px; }\n`,
+)
+
+replaceIfPresent(
+  'src/styles.css',
+  '/* Mobile visual system based on the approved IONPAY references */',
+  '/* Mobile visual system for Yorm */',
+)
+replaceRegexIfPresent(
+  'src/styles.css',
+  /\s*\.mobile-brand \.brand-ion \{[^\n]*\}\r?\n\s*\.mobile-brand \.brand-pay \{[^\n]*\}\r?\n/,
+  `\n  .mobile-brand .brand-yorm { font-size: 25px; }\n`,
+)
+replaceRegexIfPresent(
+  'src/styles.css',
+  /\s*\.profile-logo \.brand-ion \{[^\n]*\}\r?\n\s*\.profile-logo \.brand-pay \{[^\n]*\}\r?\n/,
+  `\n  .profile-logo .brand-yorm { font-size: 23px; }\n`,
 )
 
 const yPath = 'M22,24H38L54,44L70,24H86L61,56V84H47V56Z'
@@ -96,14 +114,13 @@ for (const relativePath of [
   'android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml',
   'android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml',
 ]) {
-  replaceRequired(relativePath, '@drawable/yorm_pay_foreground', '@drawable/yorm_foreground')
+  replaceIfPresent(relativePath, '@drawable/yorm_pay_foreground', '@drawable/yorm_foreground')
 }
 
 const oldForeground = filePath('android/app/src/main/res/drawable/yorm_pay_foreground.xml')
-if (!fs.existsSync(oldForeground)) {
-  throw new Error('Expected legacy PAY launcher resource was not found.')
+if (fs.existsSync(oldForeground)) {
+  fs.rmSync(oldForeground)
 }
-fs.rmSync(oldForeground)
 
 const visibleFiles = [
   'src/App.tsx',
@@ -124,6 +141,7 @@ for (const relativePath of visibleFiles) {
     /ionPAY/,
     /brand-pay/,
     /brand-mini/,
+    /brand-ion/,
     /yorm_pay_foreground/,
   ].filter((expression) => expression.test(content))
 
