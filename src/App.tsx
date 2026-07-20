@@ -138,8 +138,8 @@ function directionLabel(direction: Transaction['direction']) {
 
 function Logo({ compact = false }: { compact?: boolean }) {
   return (
-    <div className={`brand ${compact ? 'compact' : ''}`} aria-label="ionPAY">
-      {compact ? <span className="brand-mini">i<span>PAY</span></span> : <><span className="brand-ion">ion</span><span className="brand-pay">PAY</span></>}
+    <div className={`brand ${compact ? 'compact' : ''}`} aria-label="PAY, aplicación Yorm">
+      {compact ? <span className="brand-mini">PAY</span> : <span className="brand-pay">PAY</span>}
     </div>
   )
 }
@@ -156,7 +156,7 @@ function Sidebar({ tab, setTab, mode }: { tab: Tab; setTab: (tab: Tab) => void; 
     <aside className="sidebar">
       <Logo />
       <nav>{items.map(([id, label, Icon]) => <button key={id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><Icon />{label}</button>)}</nav>
-      <div className="sidebar-help"><span>?</span><div><strong>¿Necesitas ayuda?</strong><small>Visita Ion Guide</small></div></div>
+      <div className="sidebar-help"><span>?</span><div><strong>¿Necesitas ayuda?</strong><small>Visita Yorm Guide</small></div></div>
       <div className={`demo-pill ${mode}`}><i /> {mode === 'demo' ? 'Demo local' : 'API local'}</div>
     </aside>
   )
@@ -171,7 +171,7 @@ function BalanceCard({ state, visible, setVisible }: { state: IonState; visible:
     <section className="balance-card">
       <div className="balance-top"><span>Saldo disponible</span><button onClick={() => setVisible(!visible)} aria-label={visible ? 'Ocultar saldo' : 'Mostrar saldo'}>{visible ? <EyeIcon /> : <EyeOffIcon />}</button></div>
       <div className="main-balance">{visible ? money(state.wallet.pen, 'PEN') : 'S/ ••••••'}</div>
-      <div className="balance-meta"><div><span>Wallet ionPAY V1</span><strong>Saldo fiat local</strong></div></div>
+      <div className="balance-meta"><div><span>Wallet Yorm V1</span><strong>Saldo fiat local</strong></div></div>
     </section>
   )
 }
@@ -264,7 +264,7 @@ function ActivityPage({ transactions, mode, openReceipt }: { transactions: Trans
 
   return (
     <section className="page-section">
-      <div className="page-heading"><span className="eyebrow">Ion Activity</span><h1>Tu actividad</h1><p>{mode === 'api' ? 'Consulta movimientos PEN confirmados por la API local.' : 'Consulta movimientos PEN simulados en modo demo.'}</p></div>
+      <div className="page-heading"><span className="eyebrow">Yorm Activity</span><h1>Tu actividad</h1><p>{mode === 'api' ? 'Consulta movimientos PEN confirmados por la API local.' : 'Consulta movimientos PEN simulados en modo demo.'}</p></div>
       <ActivityProofSummary transactions={visibleTransactions} mode={mode} />
       <div className="activity-tools"><label className="search-box"><SearchIcon /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar movimiento o referencia" /></label><div className="filter-chips">{([['all', 'Todos'], ['receive', 'Recibidos'], ['send', 'Enviados'], ['payment', 'Pagos']] as const).map(([id, label]) => <button key={id} className={filter === id ? 'active' : ''} onClick={() => setFilter(id)}>{label}</button>)}</div></div>
       <div className="section-card full-list">{filtered.length ? filtered.map((item) => <TransactionRow key={item.id} item={item} mode={mode} onOpen={openReceipt} />) : <EmptyActivity />}</div>
@@ -277,7 +277,7 @@ function ProfilePage({ user, onReset, logoutLabel }: { user: IonUser; onReset: (
     <section className="page-section profile-page">
       <header className="profile-screen-header"><span /><h1>Perfil</h1><span /></header>
       <div className="profile-identity"><div className="avatar">{user.name.split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase()}</div><div><h2>{user.name}</h2><span><ShieldIcon /> Cuenta {user.kycStatus === 'Verificado' ? 'verificada' : 'pendiente'}</span></div></div>
-      <section className="profile-info-card"><div><UserIcon /><span><small>IonTag</small><strong>@{user.alias}</strong></span></div><div><ShieldIcon /><span><small>Estado KYC</small><strong>{user.kycStatus}</strong></span></div></section>
+      <section className="profile-info-card"><div><UserIcon /><span><small>YormTag</small><strong>@{user.alias}</strong></span></div><div><ShieldIcon /><span><small>Estado KYC</small><strong>{user.kycStatus}</strong></span></div></section>
       <span className="profile-section-label">Cuenta V1</span>
       <section className="profile-menu-card"><div className="profile-menu-row"><span className="profile-row-icon"><ActivityIcon /></span><span className="profile-row-copy"><strong>Historial</strong><small>Movimientos y registros internos</small></span><span className="profile-row-value">Disponible</span><ChevronIcon /></div><div className="profile-menu-row"><span className="profile-row-icon"><ReceiveIcon /></span><span className="profile-row-copy"><strong>Cobros básicos</strong><small>Solicitudes de pago en PEN</small></span><span className="profile-row-value">V1</span><ChevronIcon /></div></section>
       <button className="profile-logout" onClick={onReset}><LogoutIcon /> {logoutLabel}</button>
@@ -308,9 +308,9 @@ function ActionModal({ action, state, demoMode, paymentRequests, processing, pro
   const requestBusy = processing || Boolean(processingRequestId)
 
   const config = {
-    send: { title: 'Enviar dinero', eyebrow: demoMode ? 'Modo demostración' : 'Transferencia IONPAY API', target: 'Destinatario', placeholder: '@usuario o celular', button: 'Registrar envío' },
+    send: { title: 'Enviar dinero', eyebrow: demoMode ? 'Modo demostración' : 'Transferencia Yorm API', target: 'Destinatario', placeholder: '@usuario o celular', button: 'Registrar envío' },
     pay: { title: 'Realizar un pago', eyebrow: demoMode ? 'Modo demostración' : 'Solicitudes por pagar', target: 'Comercio', placeholder: 'Nombre o código del comercio', button: 'Registrar pago' },
-    receive: { title: demoMode ? 'Recibir dinero' : 'Crear solicitud de pago', eyebrow: demoMode ? 'Tu cuenta IONPAY' : 'Cobro IONPAY API', target: 'Pagador', placeholder: '@usuario pagador', button: 'Crear solicitud' },
+    receive: { title: demoMode ? 'Recibir dinero' : 'Crear solicitud de pago', eyebrow: demoMode ? 'Tu cuenta Yorm' : 'Cobro Yorm API', target: 'Pagador', placeholder: '@usuario pagador', button: 'Crear solicitud' },
   }[action]
 
   const submit = async (event: FormEvent) => {
@@ -371,7 +371,7 @@ function ReceivePanel({ user }: { user: IonUser }) {
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1600)
   }
-  return <div className="receive-panel"><div className="qr-code">{QR_BITS.map((bit, index) => <i key={index} className={bit === '1' ? 'dark' : ''} />)}<span className="qr-logo"><Logo compact /></span></div><p>Comparte este código para recibir soles en tu cuenta.</p><button className="alias-copy" onClick={copy}><span><small>Tu IonTag</small><strong>@{user.alias}</strong></span>{copied ? <CheckIcon /> : <CopyIcon />}</button>{copied && <div className="copied-label">IonTag copiado</div>}</div>
+  return <div className="receive-panel"><div className="qr-code">{QR_BITS.map((bit, index) => <i key={index} className={bit === '1' ? 'dark' : ''} />)}<span className="qr-logo"><Logo compact /></span></div><p>Comparte este código para recibir soles en tu cuenta.</p><button className="alias-copy" onClick={copy}><span><small>Tu YormTag</small><strong>@{user.alias}</strong></span>{copied ? <CheckIcon /> : <CopyIcon />}</button>{copied && <div className="copied-label">YormTag copiado</div>}</div>
 }
 
 function ReceiptModal({ item, mode, onClose }: { item: Transaction; mode: ProofMode; onClose: () => void }) {
@@ -380,7 +380,7 @@ function ReceiptModal({ item, mode, onClose }: { item: Transaction; mode: ProofM
   const isCompleted = item.status === 'Completado'
   const proofTitle = mode === 'api' ? 'API local · no es comprobante bancario ni release de producción' : 'Demo local · no mueve dinero real'
   const proofDescription = mode === 'api'
-    ? 'Registro de actividad confirmado por backend local dentro de ionPAY V1.'
+    ? 'Registro de actividad confirmado por backend local dentro de Yorm V1.'
     : 'Registro de actividad generado por demo local para revisión visual.'
 
   if (!availability.canOpen) {
@@ -422,7 +422,7 @@ function ReceiptModal({ item, mode, onClose }: { item: Transaction; mode: ProofM
           <div><span>Referencia</span><strong>{item.backendReference || item.id}</strong></div>
           {item.note && <div><span>Nota</span><strong>{item.note}</strong></div>}
         </div>
-        <div className="receipt-warning"><strong>Recibo interno ionPAY V1</strong><span>{mode === 'api' ? 'No es comprobante bancario ni release de producción.' : 'Demo local: no prueba movimiento financiero real.'}</span></div>
+        <div className="receipt-warning"><strong>Recibo interno Yorm V1</strong><span>{mode === 'api' ? 'No es comprobante bancario ni release de producción.' : 'Demo local: no prueba movimiento financiero real.'}</span></div>
         <button className="secondary-button" onClick={onClose}>Cerrar registro</button>
       </section>
     </div>
