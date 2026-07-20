@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'com.ionpay.app',
-  appName: 'IONPAY',
+  appName: 'Yorm',
   webDir: 'dist',
   server: {
     androidScheme: 'https',
