@@ -10,18 +10,11 @@ interface OnboardingProps {
   onRetry: () => void
 }
 
-// Local copy of the Logo component since the original Logo is defined in App.tsx and not exported
+// Local PAY mark used by the Yorm onboarding surface.
 function Logo({ compact = false }: { compact?: boolean }) {
   return (
-    <div className={`brand ${compact ? 'compact' : ''}`} aria-label="ionPAY">
-      {compact ? (
-        <span className="brand-mini">i<span>PAY</span></span>
-      ) : (
-        <>
-          <span className="brand-ion">ion</span>
-          <span className="brand-pay">PAY</span>
-        </>
-      )}
+    <div className={`brand ${compact ? 'compact' : ''}`} role="img" aria-label="Yorm, símbolo PAY">
+      <span className="brand-pay">PAY</span>
     </div>
   )
 }
@@ -88,7 +81,7 @@ function Onboarding({
         </div>
         {step === 'welcome' ? (
           <div className="auth-box">
-            <span className="eyebrow">Bienvenido a IONPAY</span>
+            <span className="eyebrow">Bienvenido a Yorm</span>
             <h2>Tu billetera de pagos empieza aquí</h2>
             <p>
               Crea tu cuenta para gestionar saldo fiat, pagos y cobros. Consulta después
@@ -140,7 +133,7 @@ function Onboarding({
             </h2>
             <p>
               {step === 'register'
-                ? 'Tus datos se registrarán en la API local de ionPAY.'
+                ? 'Tus datos se registrarán en la API local de Yorm.'
                 : 'Ingresa con el celular y la contraseña de tu cuenta.'}
             </p>
             {step === 'register' && (
@@ -165,11 +158,11 @@ function Onboarding({
             </label>
             {step === 'register' && (
               <label className="field">
-                <span>IonTag</span>
+                <span>Yorm ID</span>
                 <input
                   value={alias}
                   onChange={(e) => setAlias(e.target.value)}
-                  placeholder="alex.ion"
+                  placeholder="alex.yorm"
                   autoCapitalize="none"
                 />
               </label>
