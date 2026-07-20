@@ -1,6 +1,9 @@
 name: Yorm restricted-scope validation
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - rebrand/yorm-pay-icon
@@ -10,6 +13,7 @@ permissions:
 
 jobs:
   validate:
+    if: github.event_name == 'push' || github.head_ref == 'rebrand/yorm-pay-icon'
     name: Build, API tests, Android sync, approved restricted scope
     runs-on: ubuntu-latest
     steps:
