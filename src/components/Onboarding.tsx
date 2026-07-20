@@ -13,8 +13,8 @@ interface OnboardingProps {
 // Local copy of the Logo component since the original Logo is defined in App.tsx and not exported
 function Logo({ compact = false }: { compact?: boolean }) {
   return (
-    <div className={`brand ${compact ? 'compact' : ''}`} aria-label="PAY, aplicación Yorm">
-      {compact ? <span className="brand-mini">PAY</span> : <span className="brand-pay">PAY</span>}
+    <div className={`brand ${compact ? 'compact' : ''}`} aria-label="Yorm">
+      <span className="brand-yorm">{compact ? 'Y' : 'Yorm'}</span>
     </div>
   )
 }
