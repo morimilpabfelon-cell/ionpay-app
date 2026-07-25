@@ -1,0 +1,166 @@
+{
+  "name": "ionPAY - Orchestrator Intake Test",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "5c8f6b9a-41fb-4df4-a766-9d6208ba6a70",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -640,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "32e601ae-6685-4f24-9033-028a709952a0",
+              "name": "source",
+              "value": "manual_test",
+              "type": "string"
+            },
+            {
+              "id": "57f4bb92-277a-4d1a-bfa0-d8ab36592736",
+              "name": "project",
+              "value": "ionPAY",
+              "type": "string"
+            },
+            {
+              "id": "a799a9ce-da11-4ddf-9644-40f64f9535c0",
+              "name": "task",
+              "value": "Revisar si la corrección de transferencias atómicas pertenece a V1 y qué agente debe actuar primero.",
+              "type": "string"
+            },
+            {
+              "id": "f38b038d-a005-48e0-bfd1-f3554ff5c816",
+              "name": "current_state",
+              "value": "V1 en construcción. Riesgo crítico: operaciones de dinero deben ser atómicas. Existe memoria operativa en Notion: ionPAY Agent Operating System.",
+              "type": "string"
+            },
+            {
+              "id": "205f0465-1acb-427f-ae83-d9fbba786003",
+              "name": "last_decision",
+              "value": "No agregar features nuevas. Priorizar ledger, pagos, wallet, seguridad, trazabilidad y pruebas.",
+              "type": "string"
+            },
+            {
+              "id": "d3da5f45-b451-4055-80e4-f68d2be20cdf",
+              "name": "available_evidence",
+              "value": "Notion: ionPAY Agent Operating System creado. Notion: IONPAY V1 - Restaurado existe como fuente de lectura. GitHub: morimilpabfelon-cell/ionpay-app. Agentes existentes: Product Architect, Scope Guardian, R2 Scope Planner, UI/UX Designer, Frontend Surface Implementer, Frontend Surface Reviewer, Software Engineer, Financial Safety Reviewer, Operating Executor.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "23047bc6-c85e-41a0-9a68-a359411e0b75",
+      "name": "Set Task Intake",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Clasifica esta tarea de ionPAY usando únicamente la evidencia proporcionada. Devuelve solamente JSON válido con las propiedades prioridad, area, riesgo, estado_actual, siguiente_agente, revisores_posteriores, estado_notion y puede_llegar_a_codex. Entrada:\n' + JSON.stringify($json, null, 2) }}",
+        "options": {
+          "systemMessage": "Eres ionPAY Agent Orchestrator & Memory Manager. Protege el V1 Scope Lock. No agregues features ni ejecutes acciones. Los cambios de dinero, saldos, ledger, wallet o pagos son riesgo crítico/R3. Selecciona primero al agente escritor apropiado y después al Financial Safety Reviewer. Responde exclusivamente con JSON válido, sin Markdown. Esta prueba solo clasifica: no autoriza que la tarea llegue a Codex."
+        }
+      },
+      "id": "21cc78f5-9099-4e05-ab03-a54be2c1d9bb",
+      "name": "ionPAY Orchestrator Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        -120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "50ed653f-1ae8-4976-9629-e0ac7d1f1759",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -120,
+        240
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "4e75f68e-0d31-4b0a-8e99-f81d321f6fe3",
+      "name": "Output",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        160,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Task Intake",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Task Intake": {
+      "main": [
+        [
+          {
+            "node": "ionPAY Orchestrator Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "ionPAY Orchestrator Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ionPAY Orchestrator Agent": {
+      "main": [
+        [
+          {
+            "node": "Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "6c9f5fa1-86e0-4e94-a7f7-d395d98c7b7d",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
